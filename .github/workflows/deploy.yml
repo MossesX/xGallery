@@ -48,12 +48,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: Check deploy secrets are present
         env:
-          SECRET_NAMES: ${{ toJSON(secrets) }}
           HAS_PASSWORD: ${{ secrets.VPS_PASSWORD != '' }}
           HAS_KEY: ${{ secrets.VPS_SSH_KEY != '' }}
         run: |
-          echo "Repository secret names visible to this job:"
-          echo "$SECRET_NAMES" | jq -r 'keys[]' | sed 's/^/  - /'
           echo "VPS_PASSWORD set: $HAS_PASSWORD"
           echo "VPS_SSH_KEY set:  $HAS_KEY"
           if [ "$HAS_PASSWORD" != "true" ] && [ "$HAS_KEY" != "true" ]; then
