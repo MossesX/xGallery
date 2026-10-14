@@ -27,6 +27,9 @@ import { MeLayout } from './pages/me/MeLayout'
 import { ProfilePage } from './pages/me/ProfilePage'
 import { BuddiesPage } from './pages/me/BuddiesPage'
 import { MessagesPage } from './pages/me/MessagesPage'
+import { AssistantSettingsPage } from './pages/admin/AssistantSettingsPage'
+import { InboxPage } from './pages/admin/InboxPage'
+import { RequestAccountPage } from './pages/RequestAccountPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -63,6 +66,8 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Root />} />
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/request-account" element={<RequestAccountPage />} />
+            <Route path="/contact" element={<RequestAccountPage />} />
             <Route path="/s/:token" element={<SharePage />} />
             <Route path="/public" element={<PublicDirectoryPage />} />
             <Route path="/public/:slug" element={<PublicGalleryPage />} />
@@ -92,6 +97,10 @@ export default function App() {
                     <Route path="albums/:id" element={<AlbumEditorRedirect />} />
                     <Route path="themes" element={<ThemesPage />} />
                     <Route path="appearance" element={<AppearancePage />} />
+                    <Route element={<RequireAuth role="owner" />}>
+                      <Route path="assistant" element={<AssistantSettingsPage />} />
+                      <Route path="inbox" element={<InboxPage />} />
+                    </Route>
                   </Route>
                 </Route>
               </Route>

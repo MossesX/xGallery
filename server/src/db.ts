@@ -161,6 +161,41 @@ CREATE TABLE IF NOT EXISTS album_access (
 if (!hasColumn('users', 'status')) db.exec("ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active'")
 if (!hasColumn('users', 'created_by')) db.exec('ALTER TABLE users ADD COLUMN created_by INTEGER')
 if (!hasColumn('users', 'avatar_path')) db.exec('ALTER TABLE users ADD COLUMN avatar_path TEXT')
+if (!hasColumn('users', 'ai_enabled')) db.exec('ALTER TABLE users ADD COLUMN ai_enabled INTEGER NOT NULL DEFAULT 0')
+// v4: owner inbox (account requests, contact messages) and the AI assistant's conversations.
+db.exec(`
+CREATE TABLE IF NOT EXISTS admin_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  kind TEXT NOT NULL,
+  from_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  name TEXT NOT NULL DEFAULT '',
+  contact TEXT NOT NULL DEFAULT '',
+  username_wanted TEXT NOT NULL DEFAULT '',
+  body TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'open',
+  note TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL,
+  handled_at INTEGER,
+  read_at INTEGER
+);
+CREATE TABLE IF NOT EXISTS ai_conversations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title TEXT NOT NULL DEFAULT 'New conversation',
+  cli_session_id TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS ai_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  conversation_id INTEGER NOT NULL REFERENCES ai_conversations(id) ON DELETE CASCADE,
+  role TEXT NOT NULL,
+  content TEXT NOT NULL,
+  meta TEXT NOT NULL DEFAULT '{}',
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ai_messages_conv ON ai_messages(conversation_id, id);
+`)
 // v3: social layer — buddy lists and private messages.
 db.exec(`
 CREATE TABLE IF NOT EXISTS buddies (

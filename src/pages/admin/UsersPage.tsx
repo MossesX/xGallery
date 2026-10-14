@@ -102,6 +102,7 @@ export function UsersPage() {
               <th>Member</th>
               <th>Role</th>
               {owner && <th>Galleries</th>}
+              {owner && <th title="May use the AI assistant">Assistant</th>}
               <th>Status</th>
               <th>Last seen</th>
               <th style={{ textAlign: 'right' }}>Actions</th>
@@ -135,6 +136,18 @@ export function UsersPage() {
                     <button className="btn sm" onClick={() => setAccessFor(u)}>
                       {(u.galleryIds?.length ?? 0)} of {allGalleries?.length ?? 0}
                     </button>
+                  </td>
+                )}
+                {owner && (
+                  <td>
+                    {u.role === 'owner' ? (
+                      <span className="badge success">Always</span>
+                    ) : (
+                      <label className="checkbox" title="Allow this account to use the AI assistant">
+                        <input type="checkbox" checked={!!u.aiEnabled} onChange={(e) => update.mutate({ id: u.id, patch: { aiEnabled: e.target.checked } })} aria-label={`Assistant access for ${u.display_name}`} />
+                        <span className="small">{u.aiEnabled ? 'Allowed' : 'Off'}</span>
+                      </label>
+                    )}
                   </td>
                 )}
                 <td>

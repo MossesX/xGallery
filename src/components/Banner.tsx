@@ -1,8 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, NavLink, useNavigate, useSearchParams } from 'react-router-dom'
-import { Bookmark, LogIn, LogOut, MessageCircle, Search, Settings2 } from 'lucide-react'
-import { useLogout, useMe, useSettings, useUnread } from '../api/hooks'
+import { Bookmark, LogIn, LogOut, MessageCircle, Search, Settings2, Sparkles, UserPlus } from 'lucide-react'
+import { useAiStatus, useLogout, useMe, useSettings, useUnread } from '../api/hooks'
 import { ColorModeToggle } from './ColorModeToggle'
+import { useUI } from '../store/ui'
 import { AmberMark } from '../brand/Logo'
 import { Avatar } from './Avatar'
 
@@ -24,6 +25,8 @@ function Clock() {
 export function Banner() {
   const { data: user } = useMe()
   const { data: unread } = useUnread(!!user)
+  const { data: ai } = useAiStatus(!!user)
+  const openAssistant = useUI((s) => s.openAssistant)
   const { data } = useSettings()
   const logout = useLogout()
   const navigate = useNavigate()
@@ -81,6 +84,11 @@ export function Banner() {
         )}
         <div className="banner-right">
           <Clock />
+          {user && ai?.allowed && (
+            <button className="btn sm banner-ai" onClick={() => openAssistant({ context: { url: location.pathname, title: document.title } })} title={`${ai.assistantName} · Ctrl/⌘ J`}>
+              <Sparkles size={14} /> {ai.assistantName}
+            </button>
+          )}
           <ColorModeToggle />
           {user ? (
             <>
@@ -93,9 +101,14 @@ export function Banner() {
               </button>
             </>
           ) : (
-            <Link to="/login" className="btn primary sm banner-login">
-              <LogIn size={13} /> Sign in
-            </Link>
+            <>
+              <Link to="/request-account" className="btn sm banner-request" title="Request an account">
+                <UserPlus size={13} /> Request account
+              </Link>
+              <Link to="/login" className="btn primary sm banner-login">
+                <LogIn size={13} /> Sign in
+              </Link>
+            </>
           )}
         </div>
       </div>
@@ -115,7 +128,17 @@ export function Footer() {
         </span>
         <span className="row" style={{ gap: 14 }}>
           <Link to="/public">Public galleries</Link>
-          {user ? <Link to="/me">My space</Link> : <Link to="/login">Member sign in</Link>}
+          {user ? (
+            <>
+              <Link to="/me">My space</Link>
+              <Link to="/contact">Contact the owner</Link>
+            </>
+          ) : (
+            <>
+              <Link to="/request-account">Request an account</Link>
+              <Link to="/login">Member sign in</Link>
+            </>
+          )}
           <span className="muted">Powered by {s?.brandName ?? 'AmberX'}</span>
         </span>
       </div>

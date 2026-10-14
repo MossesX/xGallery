@@ -8,6 +8,7 @@ export interface User {
   disabled: number
   bio: string
   avatarUrl: string | null
+  aiEnabled: boolean
   created_at: number
   last_seen_at: number | null
   status: 'active' | 'pending'
@@ -233,4 +234,66 @@ export interface Conversation {
 export interface Unread {
   messages: number
   requests: number
+}
+
+/* ---------- assistant ---------- */
+
+export interface AiStatus {
+  allowed: boolean
+  enabled: boolean
+  assistantName: string
+  model: string
+  backends: { subscription: boolean; api: boolean }
+  codeChanges: boolean
+  sourceVersion: string
+}
+
+export interface AiSettingsView {
+  enabled: boolean
+  model: string
+  allowCodeChanges: boolean
+  extraInstructions: string
+  assistantName: string
+  hasSubscriptionToken: boolean
+  hasApiKey: boolean
+}
+
+export interface AiConversation {
+  id: number
+  title: string
+  createdAt: number
+  updatedAt: number
+  messages: number
+}
+
+export interface AiMessage {
+  id: number
+  role: 'user' | 'assistant'
+  content: string
+  createdAt: number
+  meta: { backend?: 'subscription' | 'api'; tools?: string[]; model?: string; context?: PageContext | null }
+}
+
+export interface PageContext {
+  url?: string
+  title?: string
+  selection?: string
+  element?: string
+}
+
+/* ---------- owner inbox ---------- */
+
+export interface InboxItem {
+  id: number
+  kind: 'account_request' | 'contact'
+  from: { id: number; username: string; displayName: string } | null
+  name: string
+  contact: string
+  usernameWanted: string
+  body: string
+  status: 'open' | 'approved' | 'dismissed' | 'done'
+  note: string
+  createdAt: number
+  handledAt: number | null
+  readAt: number | null
 }

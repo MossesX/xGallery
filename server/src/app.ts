@@ -13,6 +13,8 @@ import { themesRouter } from './routes/themes.js'
 import { settingsRouter } from './routes/settings.js'
 import { galleriesRouter, publicRouter } from './routes/galleries.js'
 import { socialRouter } from './routes/social.js'
+import { aiRouter } from './routes/ai.js'
+import { inboxRouter } from './routes/inbox.js'
 
 ensureSeeded()
 // The demo community is opt-in for development (XG_DEMO=1); production data stays real.
@@ -36,6 +38,8 @@ app.use('/api/share', shareRouter)
 app.use('/api/galleries', galleriesRouter)
 app.use('/api/public', publicRouter)
 app.use('/api/social', socialRouter)
+app.use('/api/ai', aiRouter)
+app.use('/api/inbox', inboxRouter)
 app.use('/api/themes', themesRouter)
 app.use('/api/settings', settingsRouter)
 app.use('/api', mediaRouter)

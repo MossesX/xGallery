@@ -9,6 +9,7 @@ export function RequireAuth({ role }: { role?: Role }) {
   if (isLoading) return <PageLoader />
   if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />
   const ok = !role || user.role === role || (role === 'admin' && user.role === 'owner')
+  // 'owner' is strict: admins never pass.
   if (!ok) return <Navigate to="/" replace />
   return <Outlet />
 }

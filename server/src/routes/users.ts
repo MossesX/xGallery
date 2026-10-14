@@ -125,6 +125,8 @@ usersRouter.put(
     if (self && disabled) throw new HttpError(400, 'You cannot disable your own account')
     const displayName = str(b.displayName, 80) || (row.display_name as string)
     db.prepare('UPDATE users SET role = ?, disabled = ?, display_name = ? WHERE id = ?').run(role, disabled, displayName, id)
+    // Only the owner decides who may use the AI assistant.
+    if (owner && typeof b.aiEnabled === 'boolean') db.prepare('UPDATE users SET ai_enabled = ? WHERE id = ?').run(b.aiEnabled ? 1 : 0, id)
     ensureGalleryFor(id, displayName)
     if (typeof b.password === 'string' && b.password) {
       if (b.password.length < 8) throw new HttpError(400, 'Password must be at least 8 characters')

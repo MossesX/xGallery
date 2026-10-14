@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
-import type { Album, BuddyLists, Comment, Conversation, Gallery, MediaItem, Message, Person, PublicFeed, SiteSettings, Stats, Theme, ThemeDraft, Unread, User } from './types'
+import type { AiConversation, AiMessage, AiSettingsView, AiStatus, Album, BuddyLists, Comment, Conversation, Gallery, InboxItem, MediaItem, Message, Person, PublicFeed, SiteSettings, Stats, Theme, ThemeDraft, Unread, User } from './types'
 
 export const keys = {
   me: ['me'] as const,
@@ -220,4 +220,32 @@ export function useUpdateSettings() {
     mutationFn: (patch: Partial<SiteSettings>) => api.put<{ settings: SiteSettings }>('/api/settings', patch),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.settings }),
   })
+}
+
+/* ---------- assistant ---------- */
+
+export function useAiStatus(enabled = true) {
+  return useQuery({ queryKey: ['ai-status'], queryFn: () => api.get<AiStatus>('/api/ai/status'), enabled, staleTime: 60_000 })
+}
+
+export function useAiSettings() {
+  return useQuery({ queryKey: ['ai-settings'], queryFn: () => api.get<{ settings: AiSettingsView; cliInstalled: boolean; sourceVersion: string }>('/api/ai/settings') })
+}
+
+export function useAiConversations(enabled = true) {
+  return useQuery({ queryKey: ['ai-conversations'], queryFn: () => api.get<{ conversations: AiConversation[] }>('/api/ai/conversations').then((r) => r.conversations), enabled })
+}
+
+export function useAiConversation(id: number | null) {
+  return useQuery({ queryKey: ['ai-conversation', id], queryFn: () => api.get<{ conversation: AiConversation; messages: AiMessage[] }>(`/api/ai/conversations/${id}`), enabled: id != null })
+}
+
+/* ---------- owner inbox ---------- */
+
+export function useInbox(status = '', enabled = true) {
+  return useQuery({ queryKey: ['inbox', status], queryFn: () => api.get<{ items: InboxItem[] }>(`/api/inbox${status ? `?status=${status}` : ''}`).then((r) => r.items), enabled })
+}
+
+export function useInboxUnread(enabled = true) {
+  return useQuery({ queryKey: ['inbox-unread'], queryFn: () => api.get<{ open: number; unread: number }>('/api/inbox/unread'), enabled, refetchInterval: 30_000 })
 }

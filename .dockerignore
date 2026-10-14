@@ -4,5 +4,4 @@ server/dist
 data
 .git
 *.tsbuildinfo
-.github
 deploy/*.md

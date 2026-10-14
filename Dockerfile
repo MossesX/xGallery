@@ -14,7 +14,17 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/server/dist ./server/dist
-RUN mkdir -p /data && chown -R node:node /data /app
+# The assistant's codebase knowledge: a source snapshot (no build output) plus git for its patch
+# workspace and Claude Code's CLI for the owner's subscription backend.
+ARG SOURCE_VERSION=dev
+ENV SOURCE_DIR=/app/source
+RUN apk add --no-cache git ripgrep && npm i -g @anthropic-ai/claude-code && npm cache clean --force
+COPY --from=build /app/src ./source/src
+COPY --from=build /app/server/src ./source/server/src
+COPY --from=build /app/deploy ./source/deploy
+COPY --from=build /app/.github ./source/.github
+COPY --from=build /app/package.json /app/package-lock.json /app/tsconfig*.json /app/vite.config.ts /app/index.html /app/Dockerfile /app/.dockerignore /app/docker-compose*.yml /app/README.md ./source/
+RUN echo "$SOURCE_VERSION" > ./source/.source-version && mkdir -p /data && chown -R node:node /data /app
 USER node
 VOLUME ["/data"]
 EXPOSE 3000

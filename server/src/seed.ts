@@ -3,15 +3,15 @@ import { hashPassword, newSalt } from './auth.js'
 import { BRAND_THEMES, DEFAULT_SETTINGS } from './brand.js'
 import { ensureGalleryFor, grantGallery } from './access.js'
 
-export const DEFAULT_ADMIN = { username: 'admin', password: process.env.ADMIN_PASSWORD ?? 'admin123' }
+export const DEFAULT_ADMIN = { username: 'brett', displayName: 'Brett', password: process.env.ADMIN_PASSWORD ?? 'admin123' }
 
 export function ensureSeeded(): void {
   const users = (db.prepare('SELECT COUNT(*) c FROM users').get() as { c: number }).c
   if (users === 0) {
     const salt = newSalt()
-    db.prepare('INSERT INTO users(username, display_name, role, password_hash, salt, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
+    db.prepare('INSERT INTO users(username, display_name, role, password_hash, salt, created_at, ai_enabled) VALUES (?, ?, ?, ?, ?, ?, 1)').run(
       DEFAULT_ADMIN.username,
-      'Administrator',
+      DEFAULT_ADMIN.displayName,
       'owner',
       hashPassword(DEFAULT_ADMIN.password, salt),
       salt,
@@ -30,6 +30,12 @@ export function ensureSeeded(): void {
       if (existing.name !== t.name) db.prepare('UPDATE themes SET name = ? WHERE id = ?').run(t.name, existing.id)
     } else ins.run(t.name, JSON.stringify(t.light), JSON.stringify(t.dark), t.fontDisplay, t.fontBody, t.radius, t.scale, now() + i)
   })
+  // The founding administrator account becomes the owner "Brett" (username brett), keeping its password.
+  const legacyOwner = db.prepare("SELECT id FROM users WHERE username = 'admin' AND role IN ('owner', 'admin')").get() as { id: number } | undefined
+  if (legacyOwner && !db.prepare("SELECT 1 FROM users WHERE username = 'brett'").get()) {
+    db.prepare("UPDATE users SET username = 'brett', display_name = 'Brett', role = 'owner', ai_enabled = 1 WHERE id = ?").run(legacyOwner.id)
+    db.prepare("UPDATE galleries SET title = 'Brett' WHERE owner_user_id = ? AND title IN ('Administrator', 'Administrator''s Gallery')").run(legacyOwner.id)
+  }
   // Promote the first administrator to owner when upgrading from the single-admin schema.
   if (!db.prepare("SELECT 1 FROM users WHERE role = 'owner'").get()) {
     const first = db.prepare("SELECT id FROM users WHERE role = 'admin' ORDER BY created_at LIMIT 1").get() as { id: number } | undefined

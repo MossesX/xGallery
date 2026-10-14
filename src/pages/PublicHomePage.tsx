@@ -127,7 +127,10 @@ export function PublicHomePage() {
               <Link to="/login" className="btn primary" style={{ width: '100%', justifyContent: 'center' }}>
                 <LogIn size={15} /> Member sign in
               </Link>
-              <p className="muted small" style={{ margin: 0, textAlign: 'center' }}>Members get the full collections, likes, comments and saved albums.</p>
+              <Link to="/request-account" className="btn" style={{ width: '100%', justifyContent: 'center' }}>
+                Request an account
+              </Link>
+              <p className="muted small" style={{ margin: 0, textAlign: 'center' }}>Members get the full collections, likes, comments, saved albums and their own gallery.</p>
             </section>
 
             {people.length > 0 && (
@@ -178,6 +181,7 @@ export function PublicHomePage() {
             <section className="side-links muted small">
               <Link to="/public">People</Link>
               <Link to="/login">Sign in</Link>
+              <Link to="/request-account">Request an account</Link>
               <span>{site?.settings.siteTitle ?? 'xGallery'} by {site?.settings.brandName ?? 'AmberX'}</span>
             </section>
           </aside>

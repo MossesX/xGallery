@@ -12,6 +12,7 @@ export interface User {
   created_by: number | null
   bio: string
   avatarUrl: string | null
+  aiEnabled: boolean
   created_at: number
   last_seen_at: number | null
 }
@@ -49,6 +50,7 @@ export function publicUser(row: Record<string, unknown>): User {
     created_by: (row.created_by as number | null) ?? null,
     bio: (row.bio as string) ?? '',
     avatarUrl: avatarUrlFor(row.id as number, row.avatar_path),
+    aiEnabled: row.role === 'owner' || !!row.ai_enabled,
     created_at: row.created_at as number,
     last_seen_at: (row.last_seen_at as number | null) ?? null,
   }

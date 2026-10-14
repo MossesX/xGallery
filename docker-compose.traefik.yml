@@ -8,6 +8,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        SOURCE_VERSION: ${SOURCE_VERSION:-dev}
     image: xgallery-app:local
     container_name: xgallery-app
     restart: unless-stopped
