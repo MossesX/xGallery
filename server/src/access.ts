@@ -112,15 +112,30 @@ export function managedGalleryIds(u: User): number[] {
   return g ? [g.id] : []
 }
 
-/** SQL fragment selecting album rows visible to the user (without per-user restriction, applied in JS). */
-export function visibleAlbumRows(u: User): Record<string, unknown>[] {
+/**
+ * Album rows the user may browse. Browsing is identical for every role: drafts never appear and
+ * per-user restrictions apply to admins too. Pass `manage = true` for control-panel listings,
+ * which include drafts of the galleries the user manages.
+ */
+export function visibleAlbumRows(u: User, manage = false): Record<string, unknown>[] {
   const ids = accessibleGalleryIds(u)
   const managed = new Set(managedGalleryIds(u))
   const rows = db
     .prepare(`SELECT * FROM albums WHERE visibility = 'public' OR gallery_id IN (${ids.map(() => '?').join(',') || 'NULL'}) ORDER BY sort_order, created_at`)
     .all(...ids) as Record<string, unknown>[]
   return rows.filter((r) => {
-    if (managed.has(r.gallery_id as number)) return true
-    return canViewAlbum(u, { id: r.id as number, gallery_id: r.gallery_id as number, visibility: r.visibility as string, restricted: r.restricted as number })
+    if (manage && managed.has(r.gallery_id as number)) return true
+    return canBrowseAlbum(u, { id: r.id as number, gallery_id: r.gallery_id as number, visibility: r.visibility as string, restricted: r.restricted as number })
   })
+}
+
+/** Browsing visibility: the same rule for every role (no manager bypass). */
+export function canBrowseAlbum(u: User | undefined, album: AlbumAccessRow): boolean {
+  if (album.visibility === 'public') return true
+  if (!u) return false
+  if (album.visibility !== 'published') return false
+  if (!canViewGallery(u, album.gallery_id)) return false
+  if (!album.restricted) return true
+  if (canManageGallery(u, album.gallery_id)) return true
+  return !!db.prepare('SELECT 1 FROM album_access WHERE album_id = ? AND user_id = ?').get(album.id, u.id)
 }

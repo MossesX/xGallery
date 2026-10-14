@@ -19,7 +19,6 @@ export function GalleryTile({ gallery, to, publicMode = false }: { gallery: Gall
               </span>
             )}
             {gallery.granted === false && <span className="chip chip-glass">Public only</span>}
-            {gallery.isMine && <span className="chip chip-accent">Mine</span>}
           </div>
           <div className="eyebrow light">{gallery.headline ? gallery.title : 'Gallery'}</div>
           <h3>{gallery.headline || gallery.title}</h3>

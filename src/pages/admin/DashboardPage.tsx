@@ -1,12 +1,16 @@
 import { Link } from 'react-router-dom'
-import { Eye, Heart } from 'lucide-react'
-import { useStats } from '../../api/hooks'
+import { Eye, Heart, Trash2 } from 'lucide-react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { api } from '../../api/client'
+import { keys, useStats } from '../../api/hooks'
 import { formatBytes } from '../../lib/media'
 import { Avatar } from '../../components/Avatar'
 import { formatDate } from '../../components/Comments'
 
 export function DashboardPage() {
   const { data: s } = useStats()
+  const qc = useQueryClient()
+  const remove = useMutation({ mutationFn: (id: number) => api.del(`/api/comments/${id}?moderate=1`), onSuccess: () => qc.invalidateQueries({ queryKey: keys.stats }) })
   const tiles: [string, string | number | undefined, string?][] = [
     ['Albums', s ? `${s.published} / ${s.albums}` : undefined, '/admin/albums'],
     ['Media', s?.media, '/admin/albums'],
@@ -57,7 +61,7 @@ export function DashboardPage() {
           ))}
         </section>
         <section className="card">
-          <h3>Recent comments</h3>
+          <h3>Recent comments · moderation</h3>
           {!s?.recentComments.length && <p className="muted small">No comments yet.</p>}
           {s?.recentComments.map((c) => (
             <div className="comment" key={c.id}>
@@ -71,6 +75,9 @@ export function DashboardPage() {
                 </div>
                 <div className="body small">{c.body}</div>
               </div>
+              <button className="btn ghost icon sm danger" title="Delete comment" onClick={() => confirm('Delete this comment?') && remove.mutate(c.id)}>
+                <Trash2 size={14} />
+              </button>
             </div>
           ))}
         </section>

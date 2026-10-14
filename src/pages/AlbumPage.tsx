@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Clapperboard, Eye, Heart, Images, Pencil, Play, Share2, Tv } from 'lucide-react'
+import { ArrowLeft, Clapperboard, Eye, Heart, Images, Play, Share2, Tv } from 'lucide-react'
 import { useAlbum, useSettings } from '../api/hooks'
 import { MediaLayout } from '../components/MediaLayout'
 import { Lightbox } from '../components/Lightbox'
@@ -46,10 +46,6 @@ export function AlbumPage() {
     setParams(next, { replace: true })
   }
   const openAt = (i: number) => {
-    if (media[i].kind === 'video') {
-      setPlay(media[i].id)
-      return
-    }
     setOpen(i)
     const next = new URLSearchParams(params)
     next.set('m', String(media[i].id))
@@ -99,11 +95,6 @@ export function AlbumPage() {
               <Play size={14} /> Slideshow
             </button>
           )}
-          {data.canManage && (
-            <Link to={`/admin/albums/${album.id}`} className="btn sm">
-              <Pencil size={14} /> Edit
-            </Link>
-          )}
         </div>
       </div>
 
@@ -118,7 +109,6 @@ export function AlbumPage() {
                   #{t}
                 </Link>
               ))}
-              {album.visibility === 'draft' && <span className="chip">Draft</span>}
               {album.visibility === 'public' && <span className="chip chip-glass">Public</span>}
             </div>
             <h1>{album.title}</h1>
@@ -155,7 +145,7 @@ export function AlbumPage() {
       )}
 
       {open != null && (
-        <Lightbox items={media} index={open} onClose={close} onNavigate={navigateLightbox} allowComments={site.settings.allowComments} allowLikes={site.settings.allowLikes} allowDownloads={site.settings.allowDownloads} />
+        <Lightbox items={media} index={open} onClose={close} onNavigate={navigateLightbox} allowComments={site.settings.allowComments} allowLikes={site.settings.allowLikes} allowDownloads={site.settings.allowDownloads} context={album.title} />
       )}
     </main>
   )

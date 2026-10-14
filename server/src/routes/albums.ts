@@ -29,7 +29,7 @@ albumsRouter.get(
       sort === 'newest' ? 'created_at DESC' : sort === 'updated' ? 'updated_at DESC' : sort === 'title' ? 'title COLLATE NOCASE' : sort === 'popular' ? 'views DESC' : 'sort_order, created_at'
     const galleryFilter = str(req.query.gallery, 80)
     const mine = req.query.mine != null
-    let rows = visibleAlbumRows(req.user!) as IdRow[]
+    let rows = visibleAlbumRows(req.user!, mine) as IdRow[]
     if (galleryFilter) rows = rows.filter((r) => String(r.gallery_id) === galleryFilter)
     if (mine) {
       const managed = new Set(managedGalleryIds(req.user!))
@@ -44,7 +44,7 @@ albumsRouter.get(
     if (q) rows = rows.filter((r) => `${r.title} ${r.description} ${r.tags}`.toLowerCase().includes(q))
     if (tag) rows = rows.filter((r) => (JSON.parse(r.tags as string) as string[]).map((t) => t.toLowerCase()).includes(tag))
     const managedSet = new Set(managedGalleryIds(req.user!))
-    const albums = rows.map((r) => albumJson(r, req.user!.id, { access: managedSet.has(r.gallery_id as number) }))
+    const albums = rows.map((r) => albumJson(r, req.user!.id, { access: mine && managedSet.has(r.gallery_id as number) }))
     const tags = new Map<string, number>()
     for (const a of albums) for (const t of a.tags) tags.set(t, (tags.get(t) ?? 0) + 1)
     res.json({ albums, tags: [...tags.entries()].sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count })) })

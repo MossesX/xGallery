@@ -137,7 +137,6 @@ export function HomePage() {
         <div className="empty">
           {filtering ? <Search size={40} strokeWidth={1.2} /> : <LayoutGrid size={40} strokeWidth={1.2} />}
           <p style={{ marginTop: 12 }}>{filtering ? 'Nothing matches that search.' : 'No albums have been shared with you yet.'}</p>
-          {user?.role !== 'user' && !filtering && <Link to="/admin/albums">Create your first album →</Link>}
         </div>
       ) : (
         <div className="album-grid">

@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { db, now } from '../db.js'
 import { requireUser } from '../auth.js'
 import { HttpError, num, slugify, str, wrap, IdRow } from '../util.js'
-import { accessibleGalleryIds, canManageGallery, canViewAlbum, galleryById, grantedGalleryIds, type GalleryRow } from '../access.js'
+import { accessibleGalleryIds, canBrowseAlbum, canManageGallery, galleryById, grantedGalleryIds, type GalleryRow } from '../access.js'
 import { albumJson, galleryJson, mediaJson } from '../serialize.js'
 
 export const galleriesRouter = Router()
@@ -35,8 +35,8 @@ galleriesRouter.get(
     const manage = canManageGallery(req.user, g.id)
     const rows = db.prepare('SELECT * FROM albums WHERE gallery_id = ? ORDER BY sort_order, created_at').all(g.id) as IdRow[]
     const albums = rows
-      .filter((r) => manage || canViewAlbum(req.user, { id: r.id, gallery_id: g.id, visibility: r.visibility as string, restricted: r.restricted as number }))
-      .map((r) => albumJson(r, req.user!.id, { access: manage }))
+      .filter((r) => canBrowseAlbum(req.user, { id: r.id, gallery_id: g.id, visibility: r.visibility as string, restricted: r.restricted as number }))
+      .map((r) => albumJson(r, req.user!.id))
     const themeRow = g.theme_id ? (db.prepare('SELECT * FROM themes WHERE id = ?').get(g.theme_id) as IdRow | undefined) : undefined
     res.json({ gallery: galleryJson(g, req.user!.id), albums, canManage: manage, theme: themeRow ? themeJson(themeRow) : null })
   }),

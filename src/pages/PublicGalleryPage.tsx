@@ -43,7 +43,7 @@ export function PublicDirectoryPage() {
   )
 }
 
-function PublicMedia({ media, layout, allowDownloads }: { media: MediaItem[]; layout: Parameters<typeof MediaLayout>[0]['layout']; allowDownloads: boolean }) {
+function PublicMedia({ media, layout, allowDownloads, context }: { media: MediaItem[]; layout: Parameters<typeof MediaLayout>[0]['layout']; allowDownloads: boolean; context?: string }) {
   const [params, setParams] = useSearchParams()
   const [open, setOpen] = useState<number | null>(null)
   const videos = media.filter((m) => m.kind === 'video')
@@ -54,18 +54,15 @@ function PublicMedia({ media, layout, allowDownloads }: { media: MediaItem[]; la
     else next.set('play', String(id))
     setParams(next, { replace: true })
   }
-  const onOpen = (i: number) => {
-    const m = media[i]
-    if (m.kind === 'video' && videos.length) setPlay(m.id)
-    else setOpen(i)
-  }
+  void setPlay
+  const onOpen = (i: number) => setOpen(i)
   return (
     <>
       {playId != null && videos.some((v) => v.id === playId) && (
         <PlayPanel videos={videos} currentId={playId} onSelect={(id) => setPlay(id)} onClose={() => setPlay(null)} allowLikes={false} allowDownloads={allowDownloads} readOnly />
       )}
       <MediaLayout items={media} layout={{ ...layout, showLikes: false, heroCover: false }} onOpen={onOpen} />
-      {open != null && <Lightbox items={media} index={open} onClose={() => setOpen(null)} onNavigate={setOpen} allowComments={false} allowLikes={false} allowDownloads={allowDownloads} readOnly />}
+      {open != null && <Lightbox items={media} index={open} onClose={() => setOpen(null)} onNavigate={setOpen} allowComments={false} allowLikes={false} allowDownloads={allowDownloads} readOnly context={context} />}
     </>
   )
 }
@@ -110,7 +107,7 @@ export function PublicGalleryPage() {
                     Open album <ArrowRight size={14} />
                   </Link>
                 </section>
-                <PublicMedia media={data.media} layout={layout} allowDownloads={site.settings.allowDownloads} />
+                <PublicMedia media={data.media} layout={layout} allowDownloads={site.settings.allowDownloads} context={data.album.title} />
               </>
             ) : (
               <div className="empty">This gallery has no public albums yet. Members can sign in to see more.</div>
@@ -169,7 +166,7 @@ export function PublicAlbumPage() {
               <h1>{data.album.title}</h1>
               {data.album.description && <p className="muted lead" style={{ maxWidth: 720 }}>{data.album.description}</p>}
             </header>
-            <PublicMedia media={data.media} layout={layout} allowDownloads={site.settings.allowDownloads} />
+            <PublicMedia media={data.media} layout={layout} allowDownloads={site.settings.allowDownloads} context={data.album.title} />
           </>
         )}
       </main>

@@ -248,7 +248,8 @@ mediaRouter.delete(
     if (!c) throw new HttpError(404, 'Comment not found')
     const albumId = (c.album_id as number | null) ?? (db.prepare('SELECT album_id FROM media WHERE id = ?').get(c.media_id as number) as { album_id: number } | undefined)?.album_id
     const galleryId = albumId ? (db.prepare('SELECT gallery_id FROM albums WHERE id = ?').get(albumId) as { gallery_id: number } | undefined)?.gallery_id : undefined
-    if (c.user_id !== req.user!.id && !(galleryId != null && canManageGallery(req.user, galleryId))) throw new HttpError(403, 'You can only delete your own comments')
+    const moderating = req.query.moderate != null && galleryId != null && canManageGallery(req.user, galleryId)
+    if (c.user_id !== req.user!.id && !moderating) throw new HttpError(403, 'You can only delete your own comments')
     db.prepare('DELETE FROM comments WHERE id = ?').run(c.id)
     res.json({ ok: true })
   }),

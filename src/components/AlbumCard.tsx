@@ -22,7 +22,6 @@ export function AlbumCard({ album, large = false, to, publicMode = false }: { al
                 <Star size={11} fill="currentColor" /> Featured
               </span>
             )}
-            {album.visibility === 'draft' && <span className="chip">Draft</span>}
             {album.visibility === 'public' && !publicMode && <span className="chip chip-glass">Public</span>}
           </div>
           {!publicMode && <FavoriteButton album={album} compact />}

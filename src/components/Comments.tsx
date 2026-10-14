@@ -61,7 +61,7 @@ export function Comments({ mediaId, albumId, initial }: Props) {
                 <div>
                   <strong>{c.author.displayName}</strong> <span className="meta">{formatDate(c.createdAt)}</span>
                 </div>
-                {(user?.role === 'admin' || user?.id === c.userId) && (
+                {user?.id === c.userId && (
                   <button className="btn ghost icon sm" title="Delete comment" onClick={() => remove.mutate(c.id)}>
                     <Trash2 size={14} />
                   </button>
