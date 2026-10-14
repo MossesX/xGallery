@@ -75,7 +75,13 @@ albumsRouter.post(
     const info = db
       .prepare('INSERT INTO albums(slug, title, description, visibility, tags, sort_order, created_at, updated_at, gallery_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
       .run(uniqueSlug(title), title, str(req.body?.description, 2000), 'draft', JSON.stringify([]), (last.m ?? 0) + 1, t, t, galleryId)
-    const row = db.prepare('SELECT * FROM albums WHERE id = ?').get(info.lastInsertRowid as number) as IdRow
+    const newId = info.lastInsertRowid as number
+    // Optionally make the new album the gallery's public album (visible without login, shown first on the public page).
+    if (req.body?.makePublic === true) {
+      db.prepare("UPDATE albums SET visibility = 'public' WHERE id = ?").run(newId)
+      db.prepare('UPDATE galleries SET public_album_id = ?, updated_at = ? WHERE id = ?').run(newId, t, galleryId)
+    }
+    const row = db.prepare('SELECT * FROM albums WHERE id = ?').get(newId) as IdRow
     res.status(201).json({ album: albumJson(row, req.user!.id) })
   }),
 )

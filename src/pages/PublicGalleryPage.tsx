@@ -109,14 +109,14 @@ export function PublicGalleryPage() {
                 </section>
                 <PublicMedia media={data.media} layout={layout} allowDownloads={site.settings.allowDownloads} context={data.album.title} />
               </>
-            ) : (
+            ) : data.albums.length === 0 ? (
               <div className="empty">This gallery has no public albums yet. Members can sign in to see more.</div>
-            )}
-            {data.albums.length > 1 && (
+            ) : null}
+            {data.albums.filter((a) => a.id !== data.album?.id).length > 0 && (
               <>
-                <section className="toolbar" style={{ marginTop: 'calc(var(--space) * 5)' }}>
+                <section className="toolbar" style={{ marginTop: data.album ? 'calc(var(--space) * 5)' : 0 }}>
                   <div>
-                    <div className="eyebrow">More from this gallery</div>
+                    <div className="eyebrow">{data.album ? 'More from this gallery' : 'Open to everyone'}</div>
                     <h2 style={{ margin: 0 }}>Public albums</h2>
                   </div>
                   <span className="chip">

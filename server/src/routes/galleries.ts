@@ -120,7 +120,8 @@ publicRouter.get(
     if (!g) throw new HttpError(404, 'Gallery not found')
     const rows = db.prepare("SELECT * FROM albums WHERE gallery_id = ? AND visibility = 'public' ORDER BY (id = ?) DESC, featured DESC, sort_order, created_at").all(g.id, g.public_album_id ?? -1) as IdRow[]
     const albums = rows.map((r) => publicAlbumJson(r, g.slug))
-    const hook = albums.find((a) => a.id === g.public_album_id) ?? albums[0] ?? null
+    // Only an explicitly chosen public album leads the page; by default a gallery has none.
+    const hook = albums.find((a) => a.id === g.public_album_id) ?? null
     const media = hook ? (db.prepare('SELECT * FROM media WHERE album_id = ? ORDER BY sort_order, id').all(hook.id) as IdRow[]).map((m) => mediaJson(m, undefined, publicSuffix(g.slug))) : []
     const themeRow = g.theme_id ? (db.prepare('SELECT * FROM themes WHERE id = ?').get(g.theme_id) as IdRow | undefined) : undefined
     res.json({ gallery: publicGalleryJson(g), album: hook, albums, media, theme: themeRow ? themeJson(themeRow) : null })

@@ -1172,3 +1172,12 @@ img.is-loaded { opacity: 1; transition: opacity 0.2s var(--ease); }
   .banner-nav a { padding: 6px 8px; font-size: 0.8rem; }
   .banner-product { display: none; }
 }
+
+/* Admin: public album panel + row toggle */
+.public-album-panel { border-color: color-mix(in srgb, var(--c-primary) 35%, var(--c-border)); background: linear-gradient(135deg, color-mix(in srgb, var(--c-primary) 8%, var(--c-surface)), var(--c-surface)); }
+.public-album-panel h3 { display: flex; align-items: center; gap: 8px; }
+.public-album-panel h3 svg { color: var(--c-primary); }
+.btn.is-hook { color: var(--c-primary); background: color-mix(in srgb, var(--c-primary) 14%, transparent); }
+.checkbox.public-option { align-items: flex-start; padding: 12px; border: 1px dashed color-mix(in srgb, var(--c-primary) 45%, var(--c-border)); border-radius: var(--radius); background: color-mix(in srgb, var(--c-primary) 6%, transparent); }
+.checkbox.public-option > span { display: flex; flex-direction: column; gap: 2px; }
+.checkbox.public-option > span > svg { vertical-align: -2px; margin-right: 6px; color: var(--c-primary); }

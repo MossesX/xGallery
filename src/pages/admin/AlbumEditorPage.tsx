@@ -198,7 +198,7 @@ export function AlbumEditorPage() {
           <section className="card stack" style={{ gap: 'calc(var(--space) * 1.5)' }}>
             <div className="row between">
               <h3 style={{ margin: 0 }}>Who can see this album</h3>
-              {album.isPublic ? <span className="badge success">{album.isHook ? 'Public hook' : 'Public'}</span> : restricted ? <span className="badge accent">Selected members</span> : <span className="badge">All gallery members</span>}
+              {album.isPublic ? <span className="badge success">{album.isHook ? 'Public album' : 'Public'}</span> : restricted ? <span className="badge accent">Selected members</span> : <span className="badge">All gallery members</span>}
             </div>
             <label className="checkbox">
               <input type="checkbox" checked={restricted} onChange={(e) => { setRestricted(e.target.checked); setAccessDirty(true) }} /> <Lock size={14} /> Limit to selected members
@@ -207,8 +207,8 @@ export function AlbumEditorPage() {
               <CheckList options={memberOptions} selected={allowed} onChange={(ids) => { setAllowed(ids); setAccessDirty(true) }} emptyText="No members have access to this gallery yet. Add or generate members first." />
             )}
             <div className="row between">
-              <button className="btn sm" onClick={() => setPublic.mutate(!album.isHook)} disabled={setPublic.isPending} title="The hook is the album shown first on the gallery's public page">
-                <Globe size={14} /> {album.isHook ? 'Remove as public hook' : 'Make this the public hook'}
+              <button className="btn sm" onClick={() => setPublic.mutate(!album.isHook)} disabled={setPublic.isPending} title="The public album is the one visitors see first on the gallery's public page, without logging in">
+                <Globe size={14} /> {album.isHook ? 'Unset as public album' : 'Make this the public album'}
               </button>
               <button className="btn primary sm" onClick={() => saveAccess.mutate()} disabled={!accessDirty || saveAccess.isPending}>
                 Save access
