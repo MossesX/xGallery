@@ -49,11 +49,12 @@ export function albumJson(row: Record<string, unknown>, userId?: number, opts: {
   if (!cover) cover = db.prepare('SELECT * FROM media WHERE album_id = ? ORDER BY sort_order LIMIT 1').get(id) as Record<string, unknown> | undefined
   const favorited = userId != null ? !!db.prepare('SELECT 1 FROM favorites WHERE user_id = ? AND album_id = ?').get(userId, id) : false
   const gallery = galleryById(row.gallery_id as number)
+  const gOwner = gallery ? (db.prepare('SELECT id, display_name, username FROM users WHERE id = ?').get(gallery.owner_user_id) as { id: number; display_name: string; username: string } | undefined) : undefined
   const allowedUserIds = opts.access ? (db.prepare('SELECT user_id FROM album_access WHERE album_id = ?').all(id) as { user_id: number }[]).map((r) => r.user_id) : undefined
   return {
     id,
     galleryId: row.gallery_id,
-    gallery: gallery ? { id: gallery.id, slug: gallery.slug, title: gallery.title, publicAlbumId: gallery.public_album_id } : null,
+    gallery: gallery ? { id: gallery.id, slug: gallery.slug, title: gallery.title, publicAlbumId: gallery.public_album_id, owner: gOwner ? { id: gOwner.id, displayName: gOwner.display_name, username: gOwner.username } : null } : null,
     slug: row.slug,
     title: row.title,
     description: row.description,

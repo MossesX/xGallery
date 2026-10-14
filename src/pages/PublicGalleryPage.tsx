@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowRight, Compass, Images } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Compass, Heart, Images, Pin } from 'lucide-react'
 import { usePublicAlbum, usePublicGalleries, usePublicGallery, useSettings } from '../api/hooks'
 import { MediaLayout } from '../components/MediaLayout'
 import { Lightbox } from '../components/Lightbox'
@@ -9,6 +9,8 @@ import { useGalleryTheme } from '../components/GalleryTheme'
 import { PublicShell } from '../components/PublicShell'
 import { GalleryTile } from '../components/GalleryTile'
 import { AlbumCard } from '../components/AlbumCard'
+import { Avatar } from '../components/Avatar'
+import { timeAgo } from '../lib/media'
 import { PlayPanel } from '../components/PlayPanel'
 import type { MediaItem } from '../api/types'
 
@@ -20,9 +22,10 @@ export function PublicDirectoryPage() {
       <main className="page">
         <section className="toolbar">
           <div>
-            <div className="eyebrow">Open to everyone</div>
-            <h1 style={{ margin: 0 }}>Public galleries</h1>
+            <h1 style={{ margin: 0 }}>People</h1>
+            <p className="muted" style={{ margin: '4px 0 0' }}>Everyone sharing public albums.</p>
           </div>
+          {data && <span className="chip">{data.length} people</span>}
         </section>
         {isLoading ? (
           <PageLoader />
@@ -86,38 +89,62 @@ export function PublicGalleryPage() {
           </div>
         ) : (
           <>
-            <section className="hero-feature">
-              {data.gallery.splash && <img className="hero-bg" src={data.gallery.splash.thumbUrl ?? data.gallery.splash.url} alt="" />}
-              <div className="hero-shade" />
-              <div className="hero-content">
-                <div className="eyebrow light">{data.gallery.owner ? `Curated by ${data.gallery.owner.displayName}` : 'Gallery'}</div>
-                <h1>{data.gallery.headline || data.gallery.title}</h1>
-                {data.gallery.tagline && <p className="lead">{data.gallery.tagline}</p>}
+            <section className="profile">
+              <div className="profile-cover">{data.gallery.splash && <img src={data.gallery.splash.thumbUrl ?? data.gallery.splash.url} alt="" />}</div>
+              <div className="profile-row">
+                <div className="profile-avatar">
+                  <Avatar name={data.gallery.owner?.displayName ?? data.gallery.title} size={96} />
+                </div>
+                <div className="profile-info">
+                  <h1>{data.gallery.owner?.displayName ?? data.gallery.title}</h1>
+                  {data.gallery.owner && <div className="muted">@{data.gallery.owner.username}</div>}
+                  {data.gallery.tagline && <p className="profile-bio">{data.gallery.tagline}</p>}
+                </div>
+                <div className="profile-stats">
+                  <div>
+                    <strong>{data.albums.length}</strong>
+                    <span>albums</span>
+                  </div>
+                  <div>
+                    <strong>{data.albums.reduce((n, a) => n + a.counts.media, 0)}</strong>
+                    <span>photos</span>
+                  </div>
+                  <div>
+                    <strong>{data.albums.reduce((n, a) => n + a.counts.likes, 0)}</strong>
+                    <span>likes</span>
+                  </div>
+                </div>
               </div>
             </section>
             {data.album ? (
-              <>
-                <section className="toolbar">
+              <section className="pinned">
+                <div className="toolbar" style={{ marginBottom: 'calc(var(--space) * 2)' }}>
                   <div>
-                    <div className="eyebrow">Featured public album</div>
+                    <div className="eyebrow">
+                      <Pin size={11} /> Pinned
+                    </div>
                     <h2 style={{ margin: 0 }}>{data.album.title}</h2>
                     {data.album.description && <p className="muted" style={{ margin: '6px 0 0', maxWidth: 720 }}>{data.album.description}</p>}
                   </div>
-                  <Link to={`/public/${data.gallery.slug}/${data.album.slug}`} className="btn sm">
-                    Open album <ArrowRight size={14} />
-                  </Link>
-                </section>
+                  <div className="row" style={{ gap: 10 }}>
+                    <span className="muted small row" style={{ gap: 4 }}>
+                      <Heart size={13} /> {data.album.counts.likes}
+                    </span>
+                    <Link to={`/public/${data.gallery.slug}/${data.album.slug}`} className="btn sm">
+                      Open album <ArrowRight size={14} />
+                    </Link>
+                  </div>
+                </div>
                 <PublicMedia media={data.media} layout={layout} allowDownloads={site.settings.allowDownloads} context={data.album.title} />
-              </>
+              </section>
             ) : data.albums.length === 0 ? (
-              <div className="empty">This gallery has no public albums yet. Members can sign in to see more.</div>
+              <div className="empty">Nothing public here yet.</div>
             ) : null}
             {data.albums.filter((a) => a.id !== data.album?.id).length > 0 && (
               <>
                 <section className="toolbar" style={{ marginTop: data.album ? 'calc(var(--space) * 5)' : 0 }}>
                   <div>
-                    <div className="eyebrow">{data.album ? 'More from this gallery' : 'Open to everyone'}</div>
-                    <h2 style={{ margin: 0 }}>Public albums</h2>
+                    <h2 style={{ margin: 0 }}>Albums</h2>
                   </div>
                   <span className="chip">
                     <Images size={11} /> {data.albums.length} albums
@@ -158,13 +185,32 @@ export function PublicAlbumPage() {
           <>
             <div className="row between" style={{ marginBottom: 'calc(var(--space) * 2)' }}>
               <Link to={`/public/${data.gallery.slug}`} className="btn ghost sm">
-                ← {data.gallery.title}
+                <ArrowLeft size={14} /> {data.gallery.owner?.displayName ?? data.gallery.title}
               </Link>
             </div>
-            <header className="album-header">
-              <div className="eyebrow">Public album · {data.gallery.owner?.displayName}</div>
+            <header className="album-header post-header">
+              <Link to={`/public/${data.gallery.slug}`} className="feed-person">
+                <Avatar name={data.gallery.owner?.displayName ?? data.gallery.title} size={40} />
+                <span>
+                  <strong>{data.gallery.owner?.displayName ?? data.gallery.title}</strong>
+                  <span className="muted small">{data.gallery.owner ? `@${data.gallery.owner.username} · ` : ''}{timeAgo(data.album.updatedAt)}</span>
+                </span>
+              </Link>
               <h1>{data.album.title}</h1>
               {data.album.description && <p className="muted lead" style={{ maxWidth: 720 }}>{data.album.description}</p>}
+              <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
+                <span className="chip">
+                  <Images size={11} /> {data.album.counts.media} photos
+                </span>
+                <span className="chip">
+                  <Heart size={11} /> {data.album.counts.likes}
+                </span>
+                {data.album.tags.map((t) => (
+                  <Link to={`/?tag=${encodeURIComponent(t)}`} className="chip chip-tag" key={t}>
+                    #{t}
+                  </Link>
+                ))}
+              </div>
             </header>
             <PublicMedia media={data.media} layout={layout} allowDownloads={site.settings.allowDownloads} context={data.album.title} />
           </>

@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { db, now } from '../db.js'
 import { requireUser } from '../auth.js'
-import { HttpError, num, slugify, str, wrap, IdRow } from '../util.js'
+import { HttpError, num, parseJson, slugify, str, wrap, IdRow } from '../util.js'
 import { accessibleGalleryIds, canBrowseAlbum, canManageGallery, galleryById, grantedGalleryIds, type GalleryRow } from '../access.js'
 import { albumJson, galleryJson, mediaJson } from '../serialize.js'
 
@@ -104,6 +104,33 @@ function publicAlbumJson(row: IdRow, slug: string) {
   const suffix = publicSuffix(slug)
   return { ...a, cover: a.cover ? { ...a.cover, url: a.cover.url + suffix, thumbUrl: a.cover.thumbUrl ? a.cover.thumbUrl + suffix : null } : null }
 }
+
+/** The social feed: every public album across all galleries, the people behind them, tags and totals. */
+publicRouter.get(
+  '/feed',
+  wrap((req, res) => {
+    const sort = str(req.query.sort, 20) || 'newest'
+    const q = str(req.query.q, 80).toLowerCase()
+    const tag = str(req.query.tag, 40).toLowerCase()
+    const galleries = db.prepare("SELECT DISTINCT g.* FROM galleries g JOIN albums a ON a.gallery_id = g.id WHERE a.visibility = 'public' ORDER BY g.updated_at DESC").all() as unknown as GalleryRow[]
+    const bySlug = new Map(galleries.map((g) => [g.id, g.slug]))
+    let rows = db.prepare("SELECT a.* FROM albums a WHERE a.visibility = 'public'").all() as IdRow[]
+    if (q) rows = rows.filter((r) => `${r.title} ${r.description} ${r.tags}`.toLowerCase().includes(q))
+    if (tag) rows = rows.filter((r) => parseJson<string[]>(r.tags, []).some((x) => x.toLowerCase() === tag))
+    let albums = rows.map((r) => publicAlbumJson(r, bySlug.get(r.gallery_id as number) ?? ''))
+    if (q) albums = albums.filter((a) => a.gallery?.owner?.displayName.toLowerCase().includes(q) || `${a.title} ${a.description} ${a.tags.join(' ')}`.toLowerCase().includes(q))
+    albums.sort((a, b) => {
+      if (sort === 'popular') return (b.views as number) - (a.views as number) || (b.updatedAt as number) - (a.updatedAt as number)
+      if (sort === 'liked') return b.counts.likes + b.counts.comments - (a.counts.likes + a.counts.comments) || (b.updatedAt as number) - (a.updatedAt as number)
+      return (b.updatedAt as number) - (a.updatedAt as number)
+    })
+    const tags = new Map<string, number>()
+    for (const a of albums) for (const t of a.tags) tags.set(t, (tags.get(t) ?? 0) + 1)
+    const photos = albums.reduce((n, a) => n + a.counts.media, 0)
+    const likes = albums.reduce((n, a) => n + a.counts.likes, 0)
+    res.json({ albums, people: galleries.map(publicGalleryJson), tags: [...tags.entries()].sort((a, b) => b[1] - a[1]).slice(0, 24).map(([name, count]) => ({ name, count })), stats: { people: galleries.length, albums: albums.length, photos, likes } })
+  }),
+)
 
 publicRouter.get(
   '/galleries',

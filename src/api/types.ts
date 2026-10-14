@@ -106,6 +106,14 @@ export interface GallerySummary {
   slug: string
   title: string
   publicAlbumId: number | null
+  owner: { id: number; displayName: string; username: string } | null
+}
+
+export interface PublicFeed {
+  albums: Album[]
+  people: Gallery[]
+  tags: { name: string; count: number }[]
+  stats: { people: number; albums: number; photos: number; likes: number }
 }
 
 export interface Gallery {

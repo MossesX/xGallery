@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
-import type { Album, Comment, Gallery, MediaItem, SiteSettings, Stats, Theme, ThemeDraft, User } from './types'
+import type { Album, Comment, Gallery, MediaItem, SiteSettings, Stats, Theme, ThemeDraft, User, PublicFeed } from './types'
 
 export const keys = {
   me: ['me'] as const,
@@ -77,6 +77,11 @@ export function usePublicGallery(slug: string | undefined) {
     queryFn: () => api.get<{ gallery: Gallery; album: Album | null; albums: Album[]; media: MediaItem[]; theme: Theme | null }>(`/api/public/galleries/${encodeURIComponent(slug ?? '')}`),
     enabled: !!slug,
   })
+}
+
+export function usePublicFeed(params: { sort?: string; q?: string; tag?: string } = {}) {
+  const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v) as [string, string][]).toString()
+  return useQuery({ queryKey: ['public-feed', params], queryFn: () => api.get<PublicFeed>(`/api/public/feed${qs ? `?${qs}` : ''}`), placeholderData: (prev) => prev })
 }
 
 export function usePublicGalleries() {

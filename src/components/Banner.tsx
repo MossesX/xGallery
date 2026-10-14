@@ -54,7 +54,7 @@ export function Banner() {
           <NavLink to="/" end>
             {user ? 'Home' : 'Explore'}
           </NavLink>
-          <NavLink to={user ? '/galleries' : '/public'}>Galleries</NavLink>
+          <NavLink to={user ? '/galleries' : '/public'}>{user ? 'Galleries' : 'People'}</NavLink>
           {user && (
             <NavLink to="/favorites">
               <Bookmark size={13} /> Saved

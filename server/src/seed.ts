@@ -48,6 +48,8 @@ export function ensureSeeded(): void {
   }
   const settings = getSetting<Record<string, unknown>>('site', {})
   const merged = { ...DEFAULT_SETTINGS, ...settings }
+  // Retire the old default tagline on existing installs; a custom tagline is kept.
+  if (merged.tagline === 'Curated visual stories by AmberX') merged.tagline = DEFAULT_SETTINGS.tagline
   if (merged.activeThemeId == null) {
     const first = db.prepare('SELECT id FROM themes ORDER BY created_at LIMIT 1').get() as { id: number } | undefined
     merged.activeThemeId = first?.id ?? null

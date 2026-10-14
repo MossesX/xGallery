@@ -108,7 +108,7 @@ export const DEFAULT_LAYOUT = {
 
 export const DEFAULT_SETTINGS = {
   siteTitle: 'xGallery',
-  tagline: 'Curated visual stories by AmberX',
+  tagline: 'Share what you see',
   brandName: 'AmberX',
   activeThemeId: null as number | null,
   defaultLayout: DEFAULT_LAYOUT,
