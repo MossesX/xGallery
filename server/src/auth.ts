@@ -11,8 +11,14 @@ export interface User {
   status: 'active' | 'pending'
   created_by: number | null
   bio: string
+  avatarUrl: string | null
   created_at: number
   last_seen_at: number | null
+}
+
+/** Public URL of a user's profile picture, versioned by its stored path so browsers refresh on change. */
+export function avatarUrlFor(id: number, avatarPath: unknown): string | null {
+  return typeof avatarPath === 'string' && avatarPath ? `/api/social/avatar/${id}?v=${encodeURIComponent(avatarPath.replace(/^.*[/\\]/, '').replace(/\.[^.]*$/, ''))}` : null
 }
 
 const SESSION_DAYS = 30
@@ -42,6 +48,7 @@ export function publicUser(row: Record<string, unknown>): User {
     status: ((row.status as string) === 'pending' ? 'pending' : 'active'),
     created_by: (row.created_by as number | null) ?? null,
     bio: (row.bio as string) ?? '',
+    avatarUrl: avatarUrlFor(row.id as number, row.avatar_path),
     created_at: row.created_at as number,
     last_seen_at: (row.last_seen_at as number | null) ?? null,
   }

@@ -39,7 +39,7 @@ export function GalleryPage() {
         {gallery.splash && <img className="hero-bg" src={gallery.splash.thumbUrl ?? gallery.splash.url} alt="" />}
         <div className="hero-shade" />
         <div className="hero-content">
-          <div className="eyebrow light">{gallery.owner ? `Curated by ${gallery.owner.displayName}` : 'Gallery'}</div>
+          <div className="eyebrow light">{gallery.owner ? `${gallery.owner.displayName} · @${gallery.owner.username}` : 'Gallery'}</div>
           <h1>{gallery.headline || gallery.title}</h1>
           {gallery.tagline && <p className="lead">{gallery.tagline}</p>}
         </div>

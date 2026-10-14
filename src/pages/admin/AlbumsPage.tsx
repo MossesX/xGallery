@@ -48,7 +48,7 @@ export function AlbumsPage() {
       setTitle('')
       setMakePublic(false)
       if (r.album.isHook) notify(`"${r.album.title}" is now the public album`, 'success')
-      navigate(`/admin/albums/${r.album.id}`)
+      navigate(`/me/albums/${r.album.id}`)
     },
   })
   const setHook = useMutation({
@@ -108,7 +108,7 @@ export function AlbumsPage() {
               <h3 style={{ margin: 0 }}>
                 <Globe size={16} /> Public album{g.hook ? ': ' : ''}
                 {g.hook && (
-                  <Link to={`/admin/albums/${g.hook.id}`} style={{ color: 'inherit' }}>
+                  <Link to={`/me/albums/${g.hook.id}`} style={{ color: 'inherit' }}>
                     {g.hook.title}
                   </Link>
                 )}
@@ -143,7 +143,9 @@ export function AlbumsPage() {
           </div>
         </section>
       ))}
-      <p className="muted small">Drag rows to set the curated order shown on the home page. The globe marks the public album; click it on another row to switch.</p>
+      <p className="muted small">
+        Draft = only you. Buddies &amp; members = your buddies and anyone granted access. Public = everyone, no login. Drag rows to set the order on your page; the globe marks the public album.
+      </p>
       {list.length === 0 ? (
         <div className="empty">No albums yet. Create one to start uploading.</div>
       ) : (
@@ -176,14 +178,14 @@ export function AlbumsPage() {
                     <div className="row" style={{ gap: 12 }}>
                       <div className="mini-cover">{a.cover && <MediaThumb item={a.cover} alt="" />}</div>
                       <div>
-                        <Link to={`/admin/albums/${a.id}`} style={{ color: 'inherit', fontWeight: 600 }}>
+                        <Link to={`/me/albums/${a.id}`} style={{ color: 'inherit', fontWeight: 600 }}>
                           {a.title}
                         </Link>
                         <div className="muted small">
                           /album/{a.slug} {a.featured && <span className="badge accent">Featured</span>}
                           {a.isHook && <span className="badge success">Public album</span>}
                           {a.restricted && <span className="badge">Restricted</span>}
-                          {me?.role === 'owner' && a.gallery && <span className="badge primary">{a.gallery.title}</span>}
+                          {me?.role === 'owner' && a.gallery && a.gallery.owner?.id !== me.id && <span className="badge primary">{a.gallery.title}</span>}
                         </div>
                       </div>
                     </div>
@@ -193,7 +195,7 @@ export function AlbumsPage() {
                     {a.counts.videos > 0 && <span className="muted small"> · {a.counts.videos} video</span>}
                   </td>
                   <td>{a.layoutOverride ? <span className="badge accent">{a.layoutOverride.kind} (override)</span> : <span className="badge">Default</span>}</td>
-                  <td>{a.visibility === 'public' ? <span className="badge success">Public</span> : a.visibility === 'published' ? <span className="badge primary">Members</span> : <span className="badge">Draft</span>}</td>
+                  <td>{a.visibility === 'public' ? <span className="badge success">Public</span> : a.visibility === 'published' ? <span className="badge primary">Buddies</span> : <span className="badge">Draft</span>}</td>
                   <td>
                     <div className="row" style={{ justifyContent: 'flex-end', gap: 2 }}>
                       <button className="btn ghost icon sm" title={a.featured ? 'Unfeature' : 'Feature on home'} onClick={() => patch.mutate({ id: a.id, patch: { featured: !a.featured } })}>
@@ -211,7 +213,7 @@ export function AlbumsPage() {
                       </button>
                       <select className="select" value={a.visibility} onChange={(e) => patch.mutate({ id: a.id, patch: { visibility: e.target.value } })} style={{ width: 'auto', padding: '3px 6px' }} aria-label="Visibility">
                         <option value="draft">Draft</option>
-                        <option value="published">Members</option>
+                        <option value="published">Buddies &amp; members</option>
                         <option value="public">Public</option>
                       </select>
                       <button className="btn ghost icon sm danger" title="Delete" onClick={() => confirm(`Delete "${a.title}" and all its media? This cannot be undone.`) && remove.mutate(a.id)}>

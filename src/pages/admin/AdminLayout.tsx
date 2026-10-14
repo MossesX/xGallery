@@ -1,11 +1,9 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { Images, LayoutDashboard, Palette, SlidersHorizontal, Sparkles, Users } from 'lucide-react'
+import { LayoutDashboard, Palette, SlidersHorizontal, UserCircle2, Users } from 'lucide-react'
 import { useMe } from '../../api/hooks'
 
 const LINKS = [
   { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/admin/gallery', label: 'My gallery', icon: Sparkles },
-  { to: '/admin/albums', label: 'Albums', icon: Images },
   { to: '/admin/users', label: 'Members', icon: Users },
   { to: '/admin/themes', label: 'Themes', icon: Palette, ownerOnly: true },
   { to: '/admin/appearance', label: 'Site appearance', icon: SlidersHorizontal, ownerOnly: true },
@@ -25,6 +23,12 @@ export function AdminLayout() {
               <Icon size={16} /> {label}
             </NavLink>
           ))}
+          <div className="eyebrow" style={{ padding: '16px 12px 8px' }}>
+            Personal
+          </div>
+          <NavLink to="/me">
+            <UserCircle2 size={16} /> My space
+          </NavLink>
         </nav>
         <div className="grow" style={{ minWidth: 0 }}>
           <Outlet />

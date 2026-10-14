@@ -40,12 +40,12 @@ function uniqueGallerySlug(base: string): string {
   return slug
 }
 
-/** Every owner/admin account gets exactly one gallery. Creates it when missing. */
+/** Every account gets exactly one gallery. Creates it when missing. */
 export function ensureGalleryFor(userId: number, displayName: string): GalleryRow {
   const existing = galleryOf(userId)
   if (existing) return existing
   const t = now()
-  const title = `${displayName}'s Gallery`
+  const title = displayName
   db.prepare('INSERT INTO galleries(owner_user_id, slug, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run(userId, uniqueGallerySlug(displayName), title, t, t)
   grantGallery(userId, galleryOf(userId)!.id)
   return galleryOf(userId)!
@@ -63,12 +63,19 @@ export function canManageGallery(u: User | undefined, galleryId: number): boolea
   return !!g && g.owner_user_id === u.id
 }
 
-/** Can this user browse the gallery at all? */
+/** Accepted buddies, in either direction. */
+export function areBuddies(a: number, b: number): boolean {
+  return !!db.prepare("SELECT 1 FROM buddies WHERE status = 'accepted' AND ((user_id = ? AND buddy_id = ?) OR (user_id = ? AND buddy_id = ?))").get(a, b, b, a)
+}
+
+/** Can this user browse the gallery at all? Granted members and the owner's buddies can. */
 export function canViewGallery(u: User | undefined, galleryId: number): boolean {
   if (!u) return false
   if (isOwner(u)) return true
   if (canManageGallery(u, galleryId)) return true
-  return !!db.prepare('SELECT 1 FROM gallery_access WHERE user_id = ? AND gallery_id = ?').get(u.id, galleryId)
+  if (db.prepare('SELECT 1 FROM gallery_access WHERE user_id = ? AND gallery_id = ?').get(u.id, galleryId)) return true
+  const g = galleryById(galleryId)
+  return !!g && areBuddies(u.id, g.owner_user_id)
 }
 
 export interface AlbumAccessRow {
@@ -93,15 +100,21 @@ export function canViewAlbum(u: User | undefined, album: AlbumAccessRow): boolea
 export function accessibleGalleryIds(u: User): number[] {
   if (isOwner(u)) return (db.prepare('SELECT id FROM galleries').all() as { id: number }[]).map((r) => r.id)
   const rows = db
-    .prepare("SELECT gallery_id AS id FROM gallery_access WHERE user_id = ? UNION SELECT id FROM galleries WHERE owner_user_id = ? UNION SELECT DISTINCT gallery_id AS id FROM albums WHERE visibility = 'public'")
-    .all(u.id, u.id) as { id: number }[]
+    .prepare(
+      "SELECT gallery_id AS id FROM gallery_access WHERE user_id = ? UNION SELECT id FROM galleries WHERE owner_user_id = ? UNION SELECT DISTINCT gallery_id AS id FROM albums WHERE visibility = 'public' UNION SELECT g.id FROM galleries g WHERE g.owner_user_id IN (SELECT buddy_id FROM buddies WHERE user_id = ? AND status = 'accepted' UNION SELECT user_id FROM buddies WHERE buddy_id = ? AND status = 'accepted')",
+    )
+    .all(u.id, u.id, u.id, u.id) as { id: number }[]
   return rows.map((r) => r.id)
 }
 
 /** Gallery ids the user was explicitly granted or owns (no public spill-over). */
 export function grantedGalleryIds(u: User): number[] {
   if (isOwner(u)) return (db.prepare('SELECT id FROM galleries').all() as { id: number }[]).map((r) => r.id)
-  const rows = db.prepare('SELECT gallery_id AS id FROM gallery_access WHERE user_id = ? UNION SELECT id FROM galleries WHERE owner_user_id = ?').all(u.id, u.id) as { id: number }[]
+  const rows = db
+    .prepare(
+      "SELECT gallery_id AS id FROM gallery_access WHERE user_id = ? UNION SELECT id FROM galleries WHERE owner_user_id = ? UNION SELECT g.id FROM galleries g WHERE g.owner_user_id IN (SELECT buddy_id FROM buddies WHERE user_id = ? AND status = 'accepted' UNION SELECT user_id FROM buddies WHERE buddy_id = ? AND status = 'accepted')",
+    )
+    .all(u.id, u.id, u.id, u.id) as { id: number }[]
   return rows.map((r) => r.id)
 }
 

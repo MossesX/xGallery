@@ -7,6 +7,7 @@ export interface User {
   role: Role
   disabled: number
   bio: string
+  avatarUrl: string | null
   created_at: number
   last_seen_at: number | null
   status: 'active' | 'pending'
@@ -106,7 +107,7 @@ export interface GallerySummary {
   slug: string
   title: string
   publicAlbumId: number | null
-  owner: { id: number; displayName: string; username: string } | null
+  owner: { id: number; displayName: string; username: string; avatarUrl: string | null } | null
 }
 
 export interface PublicFeed {
@@ -122,7 +123,7 @@ export interface Gallery {
   title: string
   tagline: string
   headline: string
-  owner: { id: number; displayName: string; username: string } | null
+  owner: { id: number; displayName: string; username: string; avatarUrl: string | null } | null
   isMine: boolean
   splash: MediaItem | null
   splashMediaId: number | null
@@ -170,7 +171,7 @@ export interface Comment {
   albumId: number | null
   body: string
   createdAt: number
-  author: { id: number; displayName: string; username: string }
+  author: { id: number; displayName: string; username: string; avatarUrl: string | null }
 }
 
 export interface Stats {
@@ -189,4 +190,47 @@ export interface Stats {
   views: number
   recentComments: { id: number; body: string; createdAt: number; author: string; target: string; slug: string | null }[]
   topAlbums: { id: number; title: string; slug: string; views: number; likes: number }[]
+}
+
+/* ---------- social ---------- */
+
+export type BuddyState = 'none' | 'accepted' | 'outgoing' | 'incoming'
+
+export interface Person {
+  id: number
+  username: string
+  displayName: string
+  bio: string
+  avatarUrl: string | null
+  role: Role
+  gallerySlug: string | null
+  publicAlbums: number
+  buddy: BuddyState
+  lastSeenAt: number | null
+}
+
+export interface BuddyLists {
+  buddies: Person[]
+  incoming: Person[]
+  outgoing: Person[]
+}
+
+export interface Message {
+  id: number
+  fromId: number
+  toId: number
+  body: string
+  createdAt: number
+  readAt: number | null
+}
+
+export interface Conversation {
+  person: Person
+  last: Message
+  unread: number
+}
+
+export interface Unread {
+  messages: number
+  requests: number
 }

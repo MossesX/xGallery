@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
-import type { Album, Comment, Gallery, MediaItem, SiteSettings, Stats, Theme, ThemeDraft, User, PublicFeed } from './types'
+import type { Album, BuddyLists, Comment, Conversation, Gallery, MediaItem, Message, Person, PublicFeed, SiteSettings, Stats, Theme, ThemeDraft, Unread, User } from './types'
 
 export const keys = {
   me: ['me'] as const,
@@ -51,8 +51,62 @@ export function useThemes() {
   return useQuery({ queryKey: keys.themes, queryFn: () => api.get<{ themes: Theme[] }>('/api/themes').then((r) => r.themes) })
 }
 
-export function useUsers() {
-  return useQuery({ queryKey: keys.users, queryFn: () => api.get<{ users: User[] }>('/api/users').then((r) => r.users) })
+export function useUsers(enabled = true) {
+  return useQuery({ queryKey: keys.users, queryFn: () => api.get<{ users: User[] }>('/api/users').then((r) => r.users), enabled })
+}
+
+/* ---------- social ---------- */
+
+export function usePeople(q = '', enabled = true) {
+  return useQuery({ queryKey: ['people', q], queryFn: () => api.get<{ people: Person[] }>(`/api/social/people${q ? `?q=${encodeURIComponent(q)}` : ''}`).then((r) => r.people), enabled, placeholderData: (prev) => prev })
+}
+
+export function usePerson(id: number | null | undefined) {
+  return useQuery({ queryKey: ['person', id], queryFn: () => api.get<{ person: Person }>(`/api/social/people/${id}`).then((r) => r.person), enabled: id != null })
+}
+
+export function useBuddies(enabled = true) {
+  return useQuery({ queryKey: ['buddies'], queryFn: () => api.get<BuddyLists>('/api/social/buddies'), enabled })
+}
+
+export function useBuddyAction() {
+  const qc = useQueryClient()
+  const done = () => {
+    qc.invalidateQueries({ queryKey: ['buddies'] })
+    qc.invalidateQueries({ queryKey: ['people'] })
+    qc.invalidateQueries({ queryKey: ['person'] })
+    qc.invalidateQueries({ queryKey: ['unread'] })
+    qc.invalidateQueries({ queryKey: ['albums'] })
+    qc.invalidateQueries({ queryKey: ['galleries'] })
+  }
+  return useMutation({
+    mutationFn: (v: { id: number; action: 'request' | 'accept' | 'remove' }) =>
+      v.action === 'request' ? api.post<{ person: Person }>(`/api/social/buddies/${v.id}`, {}) : v.action === 'accept' ? api.put<{ person: Person }>(`/api/social/buddies/${v.id}/accept`, {}) : api.del<{ person: Person | null }>(`/api/social/buddies/${v.id}`),
+    onSuccess: done,
+  })
+}
+
+export function useConversations(enabled = true) {
+  return useQuery({ queryKey: ['conversations'], queryFn: () => api.get<{ conversations: Conversation[] }>('/api/social/messages').then((r) => r.conversations), enabled, refetchInterval: 15_000 })
+}
+
+export function useThread(id: number | null | undefined) {
+  return useQuery({ queryKey: ['thread', id], queryFn: () => api.get<{ person: Person; messages: Message[] }>(`/api/social/messages/${id}`), enabled: id != null, refetchInterval: 5_000 })
+}
+
+export function useSendMessage(id: number | null | undefined) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: string) => api.post<{ message: Message }>(`/api/social/messages/${id}`, { body }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['thread', id] })
+      qc.invalidateQueries({ queryKey: ['conversations'] })
+    },
+  })
+}
+
+export function useUnread(enabled = true) {
+  return useQuery({ queryKey: ['unread'], queryFn: () => api.get<Unread>('/api/social/unread'), enabled, refetchInterval: 20_000 })
 }
 
 export function useStats() {

@@ -5,7 +5,7 @@ import path from 'node:path'
 import { randomBytes } from 'node:crypto'
 import { pipeline } from 'node:stream/promises'
 import { db, MEDIA_DIR, now } from '../db.js'
-import { requireAdmin, requireUser } from '../auth.js'
+import { requireUser } from '../auth.js'
 import { HttpError, num, parseJson, str, wrap, IdRow } from '../util.js'
 import { commentJson, mediaJson } from '../serialize.js'
 import { canManageGallery, canViewAlbum } from '../access.js'
@@ -84,7 +84,7 @@ function requireManage(req: import('express').Request, albumId: number): void {
 
 mediaRouter.post(
   '/albums/:albumId/media',
-  requireAdmin,
+  requireUser,
   wrap(async (req, res) => {
     const albumId = Number(req.params.albumId)
     requireManage(req, albumId)
@@ -106,7 +106,7 @@ mediaRouter.post(
 
 mediaRouter.post(
   '/media/:id/thumb',
-  requireAdmin,
+  requireUser,
   wrap(async (req, res) => {
     const row = loadMedia(Number(req.params.id))
     requireManage(req, row.album_id as number)
@@ -152,7 +152,7 @@ mediaRouter.get(
 
 mediaRouter.put(
   '/media/reorder',
-  requireAdmin,
+  requireUser,
   wrap((req, res) => {
     const ids: number[] = Array.isArray(req.body?.ids) ? req.body.ids.map(Number) : []
     if (ids.length) requireManage(req, (loadMedia(ids[0]).album_id as number))
@@ -164,7 +164,7 @@ mediaRouter.put(
 
 mediaRouter.put(
   '/media/:id',
-  requireAdmin,
+  requireUser,
   wrap((req, res) => {
     const row = loadMedia(Number(req.params.id))
     requireManage(req, row.album_id as number)
@@ -177,7 +177,7 @@ mediaRouter.put(
 
 mediaRouter.delete(
   '/media/:id',
-  requireAdmin,
+  requireUser,
   wrap((req, res) => {
     const row = loadMedia(Number(req.params.id))
     requireManage(req, row.album_id as number)
@@ -220,7 +220,7 @@ mediaRouter.get(
     const row = loadMedia(Number(req.params.id))
     if (!canView(req, row)) throw new HttpError(404, 'Media not found')
     const comments = db
-      .prepare('SELECT c.*, u.display_name, u.username FROM comments c LEFT JOIN users u ON u.id = c.user_id WHERE c.media_id = ? ORDER BY c.created_at')
+      .prepare('SELECT c.*, u.display_name, u.username, u.avatar_path FROM comments c LEFT JOIN users u ON u.id = c.user_id WHERE c.media_id = ? ORDER BY c.created_at')
       .all(row.id) as IdRow[]
     res.json({ comments: comments.map(commentJson) })
   }),
@@ -235,7 +235,7 @@ mediaRouter.post(
     const body = str(req.body?.body, 2000)
     if (!body) throw new HttpError(400, 'Comment cannot be empty')
     const info = db.prepare('INSERT INTO comments(user_id, media_id, body, created_at) VALUES (?, ?, ?, ?)').run(req.user!.id, row.id, body, now())
-    const c = db.prepare('SELECT c.*, u.display_name, u.username FROM comments c JOIN users u ON u.id = c.user_id WHERE c.id = ?').get(info.lastInsertRowid as number) as IdRow
+    const c = db.prepare('SELECT c.*, u.display_name, u.username, u.avatar_path FROM comments c JOIN users u ON u.id = c.user_id WHERE c.id = ?').get(info.lastInsertRowid as number) as IdRow
     res.status(201).json({ comment: commentJson(c) })
   }),
 )

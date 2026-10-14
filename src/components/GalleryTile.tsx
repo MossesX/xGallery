@@ -37,7 +37,7 @@ export function GalleryTile({ gallery, to, publicMode = false }: { gallery: Gall
         )}
         <div className="meta">
           <span className="owner">
-            {gallery.owner && <Avatar name={gallery.owner.displayName} size={24} />}
+            {gallery.owner && <Avatar name={gallery.owner.displayName} size={24} src={gallery.owner.avatarUrl} />}
             <span>{gallery.owner?.displayName ?? 'Gallery'}</span>
           </span>
           <span className="row" style={{ gap: 10 }}>

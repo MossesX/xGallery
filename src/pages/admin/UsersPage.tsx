@@ -112,7 +112,7 @@ export function UsersPage() {
               <tr key={u.id}>
                 <td>
                   <div className="row" style={{ gap: 10 }}>
-                    <Avatar name={u.display_name} />
+                    <Avatar name={u.display_name} src={u.avatarUrl} />
                     <div>
                       <strong>{u.display_name}</strong>
                       <div className="muted small">@{u.username}</div>

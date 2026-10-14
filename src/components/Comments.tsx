@@ -55,7 +55,7 @@ export function Comments({ mediaId, albumId, initial }: Props) {
         {!comments?.length && <p className="muted small">No comments yet. Start the conversation.</p>}
         {comments?.map((c) => (
           <div className="comment" key={c.id}>
-            <Avatar name={c.author.displayName} />
+            <Avatar name={c.author.displayName} src={c.author.avatarUrl} />
             <div className="grow">
               <div className="row between">
                 <div>

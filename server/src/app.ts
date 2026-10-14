@@ -12,6 +12,7 @@ import { mediaRouter } from './routes/media.js'
 import { themesRouter } from './routes/themes.js'
 import { settingsRouter } from './routes/settings.js'
 import { galleriesRouter, publicRouter } from './routes/galleries.js'
+import { socialRouter } from './routes/social.js'
 
 ensureSeeded()
 seedDemoCommunity()
@@ -32,6 +33,7 @@ app.use('/api/albums', albumsRouter)
 app.use('/api/share', shareRouter)
 app.use('/api/galleries', galleriesRouter)
 app.use('/api/public', publicRouter)
+app.use('/api/social', socialRouter)
 app.use('/api/themes', themesRouter)
 app.use('/api/settings', settingsRouter)
 app.use('/api', mediaRouter)

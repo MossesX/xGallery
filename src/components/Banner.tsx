@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, NavLink, useNavigate, useSearchParams } from 'react-router-dom'
-import { Bookmark, LogIn, LogOut, Search, Settings2 } from 'lucide-react'
-import { useLogout, useMe, useSettings } from '../api/hooks'
+import { Bookmark, LogIn, LogOut, MessageCircle, Search, Settings2 } from 'lucide-react'
+import { useLogout, useMe, useSettings, useUnread } from '../api/hooks'
 import { ColorModeToggle } from './ColorModeToggle'
 import { AmberMark } from '../brand/Logo'
 import { Avatar } from './Avatar'
@@ -23,6 +23,7 @@ function Clock() {
 /** The AmberX toolbar shared by every page: mark, wordmark, navigation, live clock, theme and sign-in. */
 export function Banner() {
   const { data: user } = useMe()
+  const { data: unread } = useUnread(!!user)
   const { data } = useSettings()
   const logout = useLogout()
   const navigate = useNavigate()
@@ -60,6 +61,12 @@ export function Banner() {
               <Bookmark size={13} /> Saved
             </NavLink>
           )}
+          {user && (
+            <NavLink to="/me/messages" className="banner-msgs">
+              <MessageCircle size={13} /> Messages
+              {!!unread?.messages && <span className="nav-badge">{unread.messages}</span>}
+            </NavLink>
+          )}
           {(user?.role === 'admin' || user?.role === 'owner') && (
             <NavLink to="/admin">
               <Settings2 size={13} /> Admin
@@ -77,8 +84,8 @@ export function Banner() {
           <ColorModeToggle />
           {user ? (
             <>
-              <NavLink to="/account" className="banner-user" title={`${user.display_name} · Account`}>
-                <Avatar name={user.display_name} size={28} />
+              <NavLink to="/me" className="banner-user" title={`${user.display_name} · My space`}>
+                <Avatar name={user.display_name} size={28} src={user.avatarUrl} />
                 <span className="banner-username">{user.display_name.split(' ')[0]}</span>
               </NavLink>
               <button className="btn sm" onClick={() => logout.mutateAsync().then(() => navigate('/'))} title="Sign out">
@@ -108,7 +115,7 @@ export function Footer() {
         </span>
         <span className="row" style={{ gap: 14 }}>
           <Link to="/public">Public galleries</Link>
-          {user ? <Link to="/account">Account</Link> : <Link to="/login">Member sign in</Link>}
+          {user ? <Link to="/me">My space</Link> : <Link to="/login">Member sign in</Link>}
           <span className="muted">Powered by {s?.brandName ?? 'AmberX'}</span>
         </span>
       </div>

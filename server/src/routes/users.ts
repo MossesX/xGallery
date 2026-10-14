@@ -40,7 +40,7 @@ function insertUser(v: { username: string; displayName: string; role: string; pa
     .prepare('INSERT INTO users(username, display_name, role, password_hash, salt, created_at, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
     .run(v.username, v.displayName, v.role, hashPassword(v.password, salt), salt, now(), v.status, v.createdBy)
   const row = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid as number) as IdRow
-  if (v.role === 'admin' || v.role === 'owner') ensureGalleryFor(row.id, v.displayName)
+  ensureGalleryFor(row.id, v.displayName)
   return row
 }
 
@@ -125,7 +125,7 @@ usersRouter.put(
     if (self && disabled) throw new HttpError(400, 'You cannot disable your own account')
     const displayName = str(b.displayName, 80) || (row.display_name as string)
     db.prepare('UPDATE users SET role = ?, disabled = ?, display_name = ? WHERE id = ?').run(role, disabled, displayName, id)
-    if (role === 'admin' || role === 'owner') ensureGalleryFor(id, displayName)
+    ensureGalleryFor(id, displayName)
     if (typeof b.password === 'string' && b.password) {
       if (b.password.length < 8) throw new HttpError(400, 'Password must be at least 8 characters')
       const salt = newSalt()

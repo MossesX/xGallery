@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { randomBytes } from 'node:crypto'
 import { db, now } from '../db.js'
-import { requireAdmin, requireUser } from '../auth.js'
+import { requireUser } from '../auth.js'
 import { canManageGallery, canViewAlbum, galleryOf, isOwner, managedGalleryIds, visibleAlbumRows } from '../access.js'
 import { HttpError, bool, num, slugify, str, wrap, IdRow } from '../util.js'
 import { albumJson, commentJson, mediaJson } from '../serialize.js'
@@ -63,7 +63,7 @@ albumsRouter.get(
 
 albumsRouter.post(
   '/',
-  requireAdmin,
+  requireUser,
   wrap((req, res) => {
     const title = str(req.body?.title, 120)
     if (!title) throw new HttpError(400, 'Title is required')
@@ -88,7 +88,7 @@ albumsRouter.post(
 
 albumsRouter.put(
   '/reorder',
-  requireAdmin,
+  requireUser,
   wrap((req, res) => {
     const ids: number[] = Array.isArray(req.body?.ids) ? req.body.ids.map(Number) : []
     const managed = managedGalleryIds(req.user!)
@@ -123,7 +123,7 @@ albumsRouter.get(
     db.prepare('UPDATE albums SET views = views + 1 WHERE id = ?').run(row.id)
     const media = db.prepare('SELECT * FROM media WHERE album_id = ? ORDER BY sort_order, id').all(row.id) as IdRow[]
     const comments = db
-      .prepare('SELECT c.*, u.display_name, u.username FROM comments c LEFT JOIN users u ON u.id = c.user_id WHERE c.album_id = ? AND c.media_id IS NULL ORDER BY c.created_at')
+      .prepare('SELECT c.*, u.display_name, u.username, u.avatar_path FROM comments c LEFT JOIN users u ON u.id = c.user_id WHERE c.album_id = ? AND c.media_id IS NULL ORDER BY c.created_at')
       .all(row.id) as IdRow[]
     const manage = canManageGallery(req.user, row.gallery_id)
     res.json({ album: albumJson(row, req.user!.id, { access: manage }), media: media.map((m) => mediaJson(m, req.user!.id)), comments: comments.map(commentJson), canManage: manage })
@@ -132,7 +132,7 @@ albumsRouter.get(
 
 albumsRouter.put(
   '/:id',
-  requireAdmin,
+  requireUser,
   wrap((req, res) => {
     const id = Number(req.params.id)
     const row = loadManaged(req, id)
@@ -157,7 +157,7 @@ albumsRouter.put(
 /** Per-user access: restricted albums are visible only to the listed members. */
 albumsRouter.put(
   '/:id/access',
-  requireAdmin,
+  requireUser,
   wrap((req, res) => {
     const row = loadManaged(req, Number(req.params.id))
     const restricted = bool(req.body?.restricted, !!row.restricted)
@@ -172,7 +172,7 @@ albumsRouter.put(
 
 albumsRouter.post(
   '/:id/share',
-  requireAdmin,
+  requireUser,
   wrap((req, res) => {
     const id = loadManaged(req, Number(req.params.id)).id
     const enable = bool(req.body?.enabled, true)
@@ -184,7 +184,7 @@ albumsRouter.post(
 
 albumsRouter.delete(
   '/:id',
-  requireAdmin,
+  requireUser,
   wrap((req, res) => {
     const id = loadManaged(req, Number(req.params.id)).id
     const media = db.prepare('SELECT * FROM media WHERE album_id = ?').all(id) as IdRow[]
@@ -213,7 +213,7 @@ albumsRouter.get(
   wrap((req, res) => {
     const row = loadAlbum(req, req.params.id as string)
     const comments = db
-      .prepare('SELECT c.*, u.display_name, u.username FROM comments c LEFT JOIN users u ON u.id = c.user_id WHERE c.album_id = ? AND c.media_id IS NULL ORDER BY c.created_at')
+      .prepare('SELECT c.*, u.display_name, u.username, u.avatar_path FROM comments c LEFT JOIN users u ON u.id = c.user_id WHERE c.album_id = ? AND c.media_id IS NULL ORDER BY c.created_at')
       .all(row.id) as IdRow[]
     res.json({ comments: comments.map(commentJson) })
   }),
@@ -227,7 +227,7 @@ albumsRouter.post(
     const body = str(req.body?.body, 2000)
     if (!body) throw new HttpError(400, 'Comment cannot be empty')
     const info = db.prepare('INSERT INTO comments(user_id, album_id, body, created_at) VALUES (?, ?, ?, ?)').run(req.user!.id, row.id, body, now())
-    const c = db.prepare('SELECT c.*, u.display_name, u.username FROM comments c JOIN users u ON u.id = c.user_id WHERE c.id = ?').get(info.lastInsertRowid as number) as IdRow
+    const c = db.prepare('SELECT c.*, u.display_name, u.username, u.avatar_path FROM comments c JOIN users u ON u.id = c.user_id WHERE c.id = ?').get(info.lastInsertRowid as number) as IdRow
     res.status(201).json({ comment: commentJson(c) })
   }),
 )

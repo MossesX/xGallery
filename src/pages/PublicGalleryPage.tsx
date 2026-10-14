@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, ArrowRight, Compass, Heart, Images, Pin } from 'lucide-react'
-import { usePublicAlbum, usePublicGalleries, usePublicGallery, useSettings } from '../api/hooks'
+import { useMe, usePerson, usePublicAlbum, usePublicGalleries, usePublicGallery, useSettings } from '../api/hooks'
+import { BuddyButtons } from '../components/PersonRow'
+import { MessageCircle, Settings } from 'lucide-react'
 import { MediaLayout } from '../components/MediaLayout'
 import { Lightbox } from '../components/Lightbox'
 import { PageLoader } from '../components/Skeleton'
@@ -75,6 +77,9 @@ export function PublicGalleryPage() {
   const { slug } = useParams()
   const { data: site } = useSettings()
   const { data, isLoading, error } = usePublicGallery(slug)
+  const { data: me } = useMe()
+  const ownerId = data?.gallery.owner?.id ?? null
+  const { data: person } = usePerson(me && ownerId && ownerId !== me.id ? ownerId : null)
   useGalleryTheme(data?.theme)
 
   if (isLoading || !site) return <PageLoader />
@@ -93,13 +98,28 @@ export function PublicGalleryPage() {
               <div className="profile-cover">{data.gallery.splash && <img src={data.gallery.splash.thumbUrl ?? data.gallery.splash.url} alt="" />}</div>
               <div className="profile-row">
                 <div className="profile-avatar">
-                  <Avatar name={data.gallery.owner?.displayName ?? data.gallery.title} size={96} />
+                  <Avatar name={data.gallery.owner?.displayName ?? data.gallery.title} size={96} src={data.gallery.owner?.avatarUrl} />
                 </div>
                 <div className="profile-info">
                   <h1>{data.gallery.owner?.displayName ?? data.gallery.title}</h1>
                   {data.gallery.owner && <div className="muted">@{data.gallery.owner.username}</div>}
                   {data.gallery.tagline && <p className="profile-bio">{data.gallery.tagline}</p>}
                 </div>
+                {me && ownerId === me.id && (
+                  <div className="profile-actions">
+                    <Link to="/me/gallery" className="btn">
+                      <Settings size={14} /> Edit my page
+                    </Link>
+                  </div>
+                )}
+                {me && person && (
+                  <div className="profile-actions">
+                    <BuddyButtons person={person} />
+                    <Link to={`/me/messages/${person.id}`} className="btn">
+                      <MessageCircle size={14} /> Message
+                    </Link>
+                  </div>
+                )}
                 <div className="profile-stats">
                   <div>
                     <strong>{data.albums.length}</strong>
@@ -190,7 +210,7 @@ export function PublicAlbumPage() {
             </div>
             <header className="album-header post-header">
               <Link to={`/public/${data.gallery.slug}`} className="feed-person">
-                <Avatar name={data.gallery.owner?.displayName ?? data.gallery.title} size={40} />
+                <Avatar name={data.gallery.owner?.displayName ?? data.gallery.title} size={40} src={data.gallery.owner?.avatarUrl} />
                 <span>
                   <strong>{data.gallery.owner?.displayName ?? data.gallery.title}</strong>
                   <span className="muted small">{data.gallery.owner ? `@${data.gallery.owner.username} · ` : ''}{timeAgo(data.album.updatedAt)}</span>

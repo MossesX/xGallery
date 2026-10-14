@@ -35,8 +35,8 @@ export function ensureSeeded(): void {
     const first = db.prepare("SELECT id FROM users WHERE role = 'admin' ORDER BY created_at LIMIT 1").get() as { id: number } | undefined
     if (first) db.prepare("UPDATE users SET role = 'owner' WHERE id = ?").run(first.id)
   }
-  // Every owner/admin has a gallery; orphan albums go to the owner's gallery; existing members keep access.
-  const admins = db.prepare("SELECT id, display_name, role FROM users WHERE role IN ('owner', 'admin')").all() as { id: number; display_name: string; role: string }[]
+  // Every account has a gallery; orphan albums go to the owner's gallery; existing members keep access.
+  const admins = db.prepare('SELECT id, display_name, role FROM users').all() as { id: number; display_name: string; role: string }[]
   for (const a of admins) ensureGalleryFor(a.id, a.display_name)
   const owner = admins.find((a) => a.role === 'owner')
   if (owner) {

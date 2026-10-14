@@ -13,7 +13,7 @@ export function FeedCard({ album }: { album: Album }) {
     <article className="feed-card">
       <header className="feed-head">
         <Link to={`/public/${slug}`} className="feed-person">
-          <Avatar name={owner?.displayName ?? album.gallery?.title ?? '?'} size={36} />
+          <Avatar name={owner?.displayName ?? album.gallery?.title ?? '?'} size={36} src={owner?.avatarUrl} />
           <span>
             <strong>{owner?.displayName ?? album.gallery?.title}</strong>
             <span className="muted small">{owner ? `@${owner.username} · ` : ''}{timeAgo(album.updatedAt)}</span>

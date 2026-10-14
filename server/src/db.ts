@@ -160,6 +160,29 @@ CREATE TABLE IF NOT EXISTS album_access (
 `)
 if (!hasColumn('users', 'status')) db.exec("ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active'")
 if (!hasColumn('users', 'created_by')) db.exec('ALTER TABLE users ADD COLUMN created_by INTEGER')
+if (!hasColumn('users', 'avatar_path')) db.exec('ALTER TABLE users ADD COLUMN avatar_path TEXT')
+// v3: social layer — buddy lists and private messages.
+db.exec(`
+CREATE TABLE IF NOT EXISTS buddies (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  buddy_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'pending',
+  created_at INTEGER NOT NULL,
+  UNIQUE(user_id, buddy_id)
+);
+CREATE INDEX IF NOT EXISTS buddies_buddy ON buddies(buddy_id);
+CREATE TABLE IF NOT EXISTS messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  from_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  to_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  body TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  read_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS messages_to ON messages(to_id, read_at);
+CREATE INDEX IF NOT EXISTS messages_pair ON messages(from_id, to_id, created_at);
+`)
 if (!hasColumn('albums', 'gallery_id')) db.exec('ALTER TABLE albums ADD COLUMN gallery_id INTEGER')
 if (!hasColumn('albums', 'restricted')) db.exec('ALTER TABLE albums ADD COLUMN restricted INTEGER NOT NULL DEFAULT 0')
 db.exec('CREATE INDEX IF NOT EXISTS albums_gallery ON albums(gallery_id)')

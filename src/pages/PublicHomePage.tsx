@@ -37,7 +37,7 @@ export function PublicHomePage() {
             {people.map((g) => (
               <Link to={`/public/${g.slug}`} className="person-bubble" key={g.id} title={g.owner?.displayName ?? g.title}>
                 <span className="ring">
-                  {g.splash ? <img src={g.splash.thumbUrl ?? g.splash.url} alt="" loading="lazy" /> : <Avatar name={g.owner?.displayName ?? g.title} size={56} />}
+                  {g.owner?.avatarUrl ? <img src={g.owner.avatarUrl} alt="" loading="lazy" /> : g.splash ? <img src={g.splash.thumbUrl ?? g.splash.url} alt="" loading="lazy" /> : <Avatar name={g.owner?.displayName ?? g.title} size={56} />}
                 </span>
                 <span className="name">{(g.owner?.displayName ?? g.title).split(' ')[0]}</span>
               </Link>
@@ -144,7 +144,7 @@ export function PublicHomePage() {
                   {people.slice(0, 8).map((g) => (
                     <li key={g.id}>
                       <Link to={`/public/${g.slug}`} className="side-person">
-                        <Avatar name={g.owner?.displayName ?? g.title} size={34} />
+                        <Avatar name={g.owner?.displayName ?? g.title} size={34} src={g.owner?.avatarUrl} />
                         <span>
                           <strong>{g.owner?.displayName ?? g.title}</strong>
                           <span className="muted small">
