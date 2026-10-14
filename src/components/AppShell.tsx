@@ -37,8 +37,9 @@ export function AppShell() {
           </form>
           <nav className="nav">
             <NavLink to="/" end>
-              Galleries
+              Home
             </NavLink>
+            <NavLink to="/galleries">Galleries</NavLink>
             <NavLink to="/favorites">
               <Bookmark size={14} /> Saved
             </NavLink>

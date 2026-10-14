@@ -134,7 +134,7 @@ albumsRouter.put(
     const title = str(b.title, 120) || (row.title as string)
     const slug = b.slug != null ? uniqueSlug(str(b.slug, 80) || title, id) : (row.slug as string)
     const description = b.description != null ? str(b.description, 2000) : (row.description as string)
-    const visibility = b.visibility === 'published' || b.visibility === 'draft' ? b.visibility : row.visibility
+    const visibility = b.visibility === 'published' || b.visibility === 'draft' || b.visibility === 'public' ? b.visibility : row.visibility
     const tags = Array.isArray(b.tags) ? JSON.stringify(b.tags.map((t: unknown) => str(t, 40)).filter(Boolean).slice(0, 20)) : (row.tags as string)
     const layout = 'layoutOverride' in b ? (b.layoutOverride ? JSON.stringify(b.layoutOverride) : null) : (row.layout_override as string | null)
     const featured = 'featured' in b ? (bool(b.featured) ? 1 : 0) : (row.featured as number)
@@ -142,6 +142,8 @@ albumsRouter.put(
     db.prepare(
       'UPDATE albums SET title = ?, slug = ?, description = ?, visibility = ?, tags = ?, layout_override = ?, featured = ?, cover_media_id = ?, updated_at = ? WHERE id = ?',
     ).run(title, slug, description, visibility as string, tags, layout, featured, cover, now(), id)
+    // An album that stops being public can no longer be the gallery's public hook.
+    if (visibility !== 'public') db.prepare('UPDATE galleries SET public_album_id = NULL WHERE public_album_id = ? AND id = ?').run(id, row.gallery_id)
     res.json({ album: albumJson(db.prepare('SELECT * FROM albums WHERE id = ?').get(id) as IdRow, req.user!.id, { access: true }) })
   }),
 )

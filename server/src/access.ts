@@ -80,6 +80,7 @@ export interface AlbumAccessRow {
 
 /** Can this user see the album (published state + gallery access + per-user restriction)? */
 export function canViewAlbum(u: User | undefined, album: AlbumAccessRow): boolean {
+  if (album.visibility === 'public') return true
   if (!u) return false
   if (canManageGallery(u, album.gallery_id)) return true
   if (album.visibility !== 'published') return false
@@ -88,8 +89,17 @@ export function canViewAlbum(u: User | undefined, album: AlbumAccessRow): boolea
   return !!db.prepare('SELECT 1 FROM album_access WHERE album_id = ? AND user_id = ?').get(album.id, u.id)
 }
 
-/** Gallery ids the user may browse. */
+/** Gallery ids the user may browse (granted, owned, or carrying public albums). */
 export function accessibleGalleryIds(u: User): number[] {
+  if (isOwner(u)) return (db.prepare('SELECT id FROM galleries').all() as { id: number }[]).map((r) => r.id)
+  const rows = db
+    .prepare("SELECT gallery_id AS id FROM gallery_access WHERE user_id = ? UNION SELECT id FROM galleries WHERE owner_user_id = ? UNION SELECT DISTINCT gallery_id AS id FROM albums WHERE visibility = 'public'")
+    .all(u.id, u.id) as { id: number }[]
+  return rows.map((r) => r.id)
+}
+
+/** Gallery ids the user was explicitly granted or owns (no public spill-over). */
+export function grantedGalleryIds(u: User): number[] {
   if (isOwner(u)) return (db.prepare('SELECT id FROM galleries').all() as { id: number }[]).map((r) => r.id)
   const rows = db.prepare('SELECT gallery_id AS id FROM gallery_access WHERE user_id = ? UNION SELECT id FROM galleries WHERE owner_user_id = ?').all(u.id, u.id) as { id: number }[]
   return rows.map((r) => r.id)
@@ -105,9 +115,10 @@ export function managedGalleryIds(u: User): number[] {
 /** SQL fragment selecting album rows visible to the user (without per-user restriction, applied in JS). */
 export function visibleAlbumRows(u: User): Record<string, unknown>[] {
   const ids = accessibleGalleryIds(u)
-  if (!ids.length) return []
   const managed = new Set(managedGalleryIds(u))
-  const rows = db.prepare(`SELECT * FROM albums WHERE gallery_id IN (${ids.map(() => '?').join(',')}) ORDER BY sort_order, created_at`).all(...ids) as Record<string, unknown>[]
+  const rows = db
+    .prepare(`SELECT * FROM albums WHERE visibility = 'public' OR gallery_id IN (${ids.map(() => '?').join(',') || 'NULL'}) ORDER BY sort_order, created_at`)
+    .all(...ids) as Record<string, unknown>[]
   return rows.filter((r) => {
     if (managed.has(r.gallery_id as number)) return true
     return canViewAlbum(u, { id: r.id as number, gallery_id: r.gallery_id as number, visibility: r.visibility as string, restricted: r.restricted as number })

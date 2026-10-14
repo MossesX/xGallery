@@ -74,8 +74,20 @@ export function useGallery(key: string | undefined) {
 export function usePublicGallery(slug: string | undefined) {
   return useQuery({
     queryKey: keys.publicGallery(slug ?? ''),
-    queryFn: () => api.get<{ gallery: Gallery; album: Album | null; media: MediaItem[]; theme: Theme | null }>(`/api/public/galleries/${encodeURIComponent(slug ?? '')}`),
+    queryFn: () => api.get<{ gallery: Gallery; album: Album | null; albums: Album[]; media: MediaItem[]; theme: Theme | null }>(`/api/public/galleries/${encodeURIComponent(slug ?? '')}`),
     enabled: !!slug,
+  })
+}
+
+export function usePublicGalleries() {
+  return useQuery({ queryKey: ['public-galleries'], queryFn: () => api.get<{ galleries: Gallery[] }>('/api/public/galleries').then((r) => r.galleries) })
+}
+
+export function usePublicAlbum(slug: string | undefined, album: string | undefined) {
+  return useQuery({
+    queryKey: ['public-album', slug ?? '', album ?? ''],
+    queryFn: () => api.get<{ gallery: Gallery; album: Album; media: MediaItem[]; theme: Theme | null }>(`/api/public/galleries/${encodeURIComponent(slug ?? '')}/albums/${encodeURIComponent(album ?? '')}`),
+    enabled: !!slug && !!album,
   })
 }
 

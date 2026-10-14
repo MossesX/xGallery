@@ -2,6 +2,7 @@ import { useRef, type CSSProperties } from 'react'
 import { ChevronLeft, ChevronRight, Heart, Play } from 'lucide-react'
 import type { LayoutConfig, MediaItem } from '../api/types'
 import { MediaThumb } from './MediaThumb'
+import { VideoPreview } from './VideoTile'
 import { formatDuration } from '../lib/media'
 
 interface Props {
@@ -28,7 +29,7 @@ function Tile({ item, layout, onOpen, index, frameClass = '', frameStyle }: Tile
   return (
     <div className={`tile-frame ${layout.caption === 'below' ? 'below-caption' : ''} ${frameClass}`} style={frameStyle}>
       <div className={cls} onClick={() => onOpen(index)} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onOpen(index)}>
-        <MediaThumb item={item} />
+        {item.kind === 'video' ? <VideoPreview item={item} /> : <MediaThumb item={item} />}
         {item.kind === 'video' && (
           <span className="kind-badge">
             <Play size={11} fill="currentColor" /> {formatDuration(item.duration) || 'Video'}

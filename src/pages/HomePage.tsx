@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { ArrowRight, Images, LayoutGrid, Search, X } from 'lucide-react'
 import { useAlbums, useGalleries, useMe, useSettings } from '../api/hooks'
 import { AlbumCard } from '../components/AlbumCard'
-import { GalleryCard } from '../components/GalleryCard'
+import { GalleryTile } from '../components/GalleryTile'
 import { AlbumCardSkeleton } from '../components/Skeleton'
 import { MediaThumb } from '../components/MediaThumb'
 
@@ -72,10 +72,13 @@ export function HomePage() {
               <div className="eyebrow">Your access</div>
               <h2 style={{ margin: 0 }}>Galleries</h2>
             </div>
+            <Link to="/galleries" className="btn sm">
+              Browse all <ArrowRight size={14} />
+            </Link>
           </section>
-          <div className="gallery-grid">
-            {galleries!.map((g) => (
-              <GalleryCard gallery={g} key={g.id} />
+          <div className="gallery-browser">
+            {galleries!.slice(0, 6).map((g) => (
+              <GalleryTile gallery={g} key={g.id} to={`/g/${g.slug}`} />
             ))}
           </div>
         </>

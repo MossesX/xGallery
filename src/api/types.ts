@@ -99,7 +99,7 @@ export interface MediaItem {
   liked: boolean
 }
 
-export type Visibility = 'published' | 'draft'
+export type Visibility = 'published' | 'draft' | 'public'
 
 export interface GallerySummary {
   id: number
@@ -121,8 +121,12 @@ export interface Gallery {
   themeId: number | null
   publicAlbumId: number | null
   publicAlbum: { id: number; slug: string; title: string } | null
-  counts: { albums: number; members: number }
+  previews: { albumId: number; albumSlug: string; title: string; visibility: Visibility; cover: MediaItem | null }[]
+  counts: { albums: number; publicAlbums: number; media: number; videos: number; members: number }
   createdAt: number
+  updatedAt: number
+  /** Explicitly granted or owned, as opposed to visible only through public albums. */
+  granted?: boolean
 }
 
 export interface Album {
@@ -132,6 +136,7 @@ export interface Album {
   restricted: boolean
   allowedUserIds?: number[]
   isPublic: boolean
+  isHook: boolean
   slug: string
   title: string
   description: string

@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Clapperboard, Eye, Heart, Images, Pencil, Play, Share2 } from 'lucide-react'
+import { ArrowLeft, Clapperboard, Eye, Heart, Images, Pencil, Play, Share2, Tv } from 'lucide-react'
 import { useAlbum, useSettings } from '../api/hooks'
 import { MediaLayout } from '../components/MediaLayout'
 import { Lightbox } from '../components/Lightbox'
 import { Comments } from '../components/Comments'
+import { PlayPanel } from '../components/PlayPanel'
 import { FavoriteButton } from '../components/FavoriteButton'
 import { PageLoader } from '../components/Skeleton'
 import { useUI } from '../store/ui'
@@ -33,7 +34,28 @@ export function AlbumPage() {
   const layout = album.layoutOverride ?? site.settings.defaultLayout
   const heroItem = album.cover ?? media[0]
 
+  const videos = media.filter((m) => m.kind === 'video')
+  const playId = params.get('play') ? Number(params.get('play')) : null
+  const setPlay = (id: number | null) => {
+    const next = new URLSearchParams(params)
+    if (id == null) next.delete('play')
+    else {
+      next.set('play', String(id))
+      next.delete('m')
+    }
+    setParams(next, { replace: true })
+  }
   const openAt = (i: number) => {
+    if (media[i].kind === 'video') {
+      setPlay(media[i].id)
+      return
+    }
+    setOpen(i)
+    const next = new URLSearchParams(params)
+    next.set('m', String(media[i].id))
+    setParams(next, { replace: true })
+  }
+  const navigateLightbox = (i: number) => {
     setOpen(i)
     const next = new URLSearchParams(params)
     next.set('m', String(media[i].id))
@@ -67,8 +89,13 @@ export function AlbumPage() {
             <Share2 size={14} /> Share
           </button>
           <FavoriteButton album={album} />
+          {videos.length > 0 && (
+            <button className="btn sm" onClick={() => setPlay(videos[0].id)}>
+              <Tv size={14} /> Play videos
+            </button>
+          )}
           {media.length > 1 && (
-            <button className="btn sm" onClick={() => openAt(0)}>
+            <button className="btn sm" onClick={() => navigateLightbox(0)}>
               <Play size={14} /> Slideshow
             </button>
           )}
@@ -92,6 +119,7 @@ export function AlbumPage() {
                 </Link>
               ))}
               {album.visibility === 'draft' && <span className="chip">Draft</span>}
+              {album.visibility === 'public' && <span className="chip chip-glass">Public</span>}
             </div>
             <h1>{album.title}</h1>
             {album.description && <p className="lead">{album.description}</p>}
@@ -113,6 +141,10 @@ export function AlbumPage() {
         </header>
       )}
 
+      {playId != null && videos.some((v) => v.id === playId) && (
+        <PlayPanel videos={videos} currentId={playId} onSelect={(id) => setPlay(id)} onClose={() => setPlay(null)} allowLikes={site.settings.allowLikes} allowDownloads={site.settings.allowDownloads} />
+      )}
+
       <MediaLayout items={media} layout={layout} onOpen={openAt} />
 
       {site.settings.allowComments && (
@@ -123,7 +155,7 @@ export function AlbumPage() {
       )}
 
       {open != null && (
-        <Lightbox items={media} index={open} onClose={close} onNavigate={openAt} allowComments={site.settings.allowComments} allowLikes={site.settings.allowLikes} allowDownloads={site.settings.allowDownloads} />
+        <Lightbox items={media} index={open} onClose={close} onNavigate={navigateLightbox} allowComments={site.settings.allowComments} allowLikes={site.settings.allowLikes} allowDownloads={site.settings.allowDownloads} />
       )}
     </main>
   )

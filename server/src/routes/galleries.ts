@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { db, now } from '../db.js'
 import { requireUser } from '../auth.js'
 import { HttpError, num, slugify, str, wrap, IdRow } from '../util.js'
-import { accessibleGalleryIds, canManageGallery, canViewAlbum, galleryById, type GalleryRow } from '../access.js'
+import { accessibleGalleryIds, canManageGallery, canViewAlbum, galleryById, grantedGalleryIds, type GalleryRow } from '../access.js'
 import { albumJson, galleryJson, mediaJson } from '../serialize.js'
 
 export const galleriesRouter = Router()
@@ -13,8 +13,9 @@ galleriesRouter.get(
   requireUser,
   wrap((req, res) => {
     const ids = accessibleGalleryIds(req.user!)
-    const rows = ids.length ? (db.prepare(`SELECT * FROM galleries WHERE id IN (${ids.map(() => '?').join(',')}) ORDER BY created_at`).all(...ids) as unknown as GalleryRow[]) : []
-    res.json({ galleries: rows.map((g) => galleryJson(g, req.user!.id)) })
+    const granted = new Set(grantedGalleryIds(req.user!))
+    const rows = ids.length ? (db.prepare(`SELECT * FROM galleries WHERE id IN (${ids.map(() => '?').join(',')}) ORDER BY updated_at DESC`).all(...ids) as unknown as GalleryRow[]) : []
+    res.json({ galleries: rows.map((g) => ({ ...galleryJson(g, req.user!.id), granted: granted.has(g.id) })) })
   }),
 )
 
@@ -72,36 +73,70 @@ galleriesRouter.put(
     if ('publicAlbumId' in b) {
       pub = b.publicAlbumId == null ? null : num(b.publicAlbumId)
       if (pub != null && !db.prepare('SELECT 1 FROM albums WHERE id = ? AND gallery_id = ?').get(pub, g.id)) throw new HttpError(400, 'Public album must belong to this gallery')
+      // Selecting an album as the public hook makes it public.
+      if (pub != null) db.prepare("UPDATE albums SET visibility = 'public', updated_at = ? WHERE id = ?").run(now(), pub)
     }
     db.prepare('UPDATE galleries SET title = ?, slug = ?, tagline = ?, headline = ?, splash_media_id = ?, theme_id = ?, public_album_id = ?, updated_at = ? WHERE id = ?').run(title, slug, tagline, headline, splash, theme, pub, now(), g.id)
     res.json({ gallery: galleryJson(galleryById(g.id)!, req.user!.id) })
   }),
 )
 
-/** Login-free landing page: splash + the gallery's public album. */
+/** Login-free pages: gallery directory, gallery landing (splash + public albums) and public album detail. */
 export const publicRouter = Router()
+
+function publicSuffix(slug: string): string {
+  return `?g=${encodeURIComponent(slug)}`
+}
+
+function publicGalleryJson(g: GalleryRow) {
+  const j = galleryJson(g)
+  const suffix = publicSuffix(g.slug)
+  const fix = (m: ReturnType<typeof mediaJson> | null) => (m ? { ...m, url: m.url + suffix, thumbUrl: m.thumbUrl ? m.thumbUrl + suffix : null } : null)
+  return {
+    ...j,
+    splash: fix(j.splash),
+    previews: j.previews.filter((p) => p && p.visibility === 'public').map((p) => ({ ...p!, cover: fix(p!.cover) })),
+  }
+}
+
+function publicAlbumJson(row: IdRow, slug: string) {
+  const a = albumJson(row)
+  const suffix = publicSuffix(slug)
+  return { ...a, cover: a.cover ? { ...a.cover, url: a.cover.url + suffix, thumbUrl: a.cover.thumbUrl ? a.cover.thumbUrl + suffix : null } : null }
+}
+
+publicRouter.get(
+  '/galleries',
+  wrap((_req, res) => {
+    const rows = db.prepare("SELECT DISTINCT g.* FROM galleries g JOIN albums a ON a.gallery_id = g.id WHERE a.visibility = 'public' ORDER BY g.updated_at DESC").all() as unknown as GalleryRow[]
+    res.json({ galleries: rows.map(publicGalleryJson) })
+  }),
+)
+
 publicRouter.get(
   '/galleries/:slug',
   wrap((req, res) => {
     const g = db.prepare('SELECT * FROM galleries WHERE slug = ?').get(req.params.slug as string) as GalleryRow | undefined
     if (!g) throw new HttpError(404, 'Gallery not found')
-    const album = g.public_album_id ? (db.prepare("SELECT * FROM albums WHERE id = ? AND gallery_id = ? AND visibility = 'published'").get(g.public_album_id, g.id) as IdRow | undefined) : undefined
-    const media = album ? (db.prepare('SELECT * FROM media WHERE album_id = ? ORDER BY sort_order, id').all(album.id) as IdRow[]) : []
-    const suffix = `?g=${encodeURIComponent(g.slug)}`
-    const gj = galleryJson(g)
+    const rows = db.prepare("SELECT * FROM albums WHERE gallery_id = ? AND visibility = 'public' ORDER BY (id = ?) DESC, featured DESC, sort_order, created_at").all(g.id, g.public_album_id ?? -1) as IdRow[]
+    const albums = rows.map((r) => publicAlbumJson(r, g.slug))
+    const hook = albums.find((a) => a.id === g.public_album_id) ?? albums[0] ?? null
+    const media = hook ? (db.prepare('SELECT * FROM media WHERE album_id = ? ORDER BY sort_order, id').all(hook.id) as IdRow[]).map((m) => mediaJson(m, undefined, publicSuffix(g.slug))) : []
     const themeRow = g.theme_id ? (db.prepare('SELECT * FROM themes WHERE id = ?').get(g.theme_id) as IdRow | undefined) : undefined
-    res.json({
-      gallery: { ...gj, splash: gj.splash ? { ...gj.splash, url: gj.splash.url + suffix, thumbUrl: gj.splash.thumbUrl ? gj.splash.thumbUrl + suffix : null } : null },
-      album: album ? albumJson(album) : null,
-      media: media.map((m) => mediaJson(m, undefined, suffix)),
-      theme: themeRow ? themeJson(themeRow) : null,
-    })
+    res.json({ gallery: publicGalleryJson(g), album: hook, albums, media, theme: themeRow ? themeJson(themeRow) : null })
   }),
 )
+
 publicRouter.get(
-  '/galleries',
-  wrap((_req, res) => {
-    const rows = db.prepare('SELECT g.* FROM galleries g JOIN albums a ON a.id = g.public_album_id WHERE a.visibility = \'published\' ORDER BY g.created_at').all() as unknown as GalleryRow[]
-    res.json({ galleries: rows.map((g) => { const j = galleryJson(g); const suffix = `?g=${encodeURIComponent(g.slug)}`; return { ...j, splash: j.splash ? { ...j.splash, url: j.splash.url + suffix, thumbUrl: j.splash.thumbUrl ? j.splash.thumbUrl + suffix : null } : null } }) })
+  '/galleries/:slug/albums/:album',
+  wrap((req, res) => {
+    const g = db.prepare('SELECT * FROM galleries WHERE slug = ?').get(req.params.slug as string) as GalleryRow | undefined
+    if (!g) throw new HttpError(404, 'Gallery not found')
+    const row = db.prepare("SELECT * FROM albums WHERE gallery_id = ? AND slug = ? AND visibility = 'public'").get(g.id, req.params.album as string) as IdRow | undefined
+    if (!row) throw new HttpError(404, 'Album not found')
+    db.prepare('UPDATE albums SET views = views + 1 WHERE id = ?').run(row.id)
+    const media = (db.prepare('SELECT * FROM media WHERE album_id = ? ORDER BY sort_order, id').all(row.id) as IdRow[]).map((m) => mediaJson(m, undefined, publicSuffix(g.slug)))
+    const themeRow = g.theme_id ? (db.prepare('SELECT * FROM themes WHERE id = ?').get(g.theme_id) as IdRow | undefined) : undefined
+    res.json({ gallery: publicGalleryJson(g), album: publicAlbumJson(row, g.slug), media, theme: themeRow ? themeJson(themeRow) : null })
   }),
 )

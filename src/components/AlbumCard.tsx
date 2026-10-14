@@ -4,9 +4,9 @@ import type { Album } from '../api/types'
 import { MediaThumb } from './MediaThumb'
 import { FavoriteButton } from './FavoriteButton'
 
-export function AlbumCard({ album, large = false }: { album: Album; large?: boolean }) {
+export function AlbumCard({ album, large = false, to, publicMode = false }: { album: Album; large?: boolean; to?: string; publicMode?: boolean }) {
   return (
-    <Link to={`/album/${album.slug}`} className={`album-card ${large ? 'large' : ''}`}>
+    <Link to={to ?? `/album/${album.slug}`} className={`album-card ${large ? 'large' : ''}`}>
       <div className="cover">
         {album.cover ? (
           <MediaThumb item={album.cover} alt="" />
@@ -23,8 +23,9 @@ export function AlbumCard({ album, large = false }: { album: Album; large?: bool
               </span>
             )}
             {album.visibility === 'draft' && <span className="chip">Draft</span>}
+            {album.visibility === 'public' && !publicMode && <span className="chip chip-glass">Public</span>}
           </div>
-          <FavoriteButton album={album} compact />
+          {!publicMode && <FavoriteButton album={album} compact />}
         </div>
         <div className="cover-bottom">
           <span className="chip chip-glass">
@@ -50,12 +51,16 @@ export function AlbumCard({ album, large = false }: { album: Album; large?: bool
             ))}
           </div>
           <div className="row muted small" style={{ gap: 10 }}>
-            <span className="row" style={{ gap: 3 }}>
-              <Heart size={12} /> {album.counts.likes}
-            </span>
-            <span className="row" style={{ gap: 3 }}>
-              <MessageSquare size={12} /> {album.counts.comments}
-            </span>
+            {!publicMode && (
+              <>
+                <span className="row" style={{ gap: 3 }}>
+                  <Heart size={12} /> {album.counts.likes}
+                </span>
+                <span className="row" style={{ gap: 3 }}>
+                  <MessageSquare size={12} /> {album.counts.comments}
+                </span>
+              </>
+            )}
             <span className="row" style={{ gap: 3 }}>
               <Eye size={12} /> {album.views}
             </span>

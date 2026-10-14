@@ -5,9 +5,20 @@ import { galleryById, type GalleryRow } from './access.js'
 export function galleryJson(g: GalleryRow, userId?: number) {
   const owner = db.prepare('SELECT id, display_name, username FROM users WHERE id = ?').get(g.owner_user_id) as { id: number; display_name: string; username: string } | undefined
   const splash = g.splash_media_id ? (db.prepare('SELECT * FROM media WHERE id = ?').get(g.splash_media_id) as Record<string, unknown> | undefined) : undefined
-  const albums = (db.prepare("SELECT COUNT(*) c FROM albums WHERE gallery_id = ? AND visibility = 'published'").get(g.id) as { c: number }).c
+  const albums = (db.prepare("SELECT COUNT(*) c FROM albums WHERE gallery_id = ? AND visibility IN ('published', 'public')").get(g.id) as { c: number }).c
+  const publicAlbums = (db.prepare("SELECT COUNT(*) c FROM albums WHERE gallery_id = ? AND visibility = 'public'").get(g.id) as { c: number }).c
+  const media = (db.prepare("SELECT COUNT(*) c FROM media m JOIN albums a ON a.id = m.album_id WHERE a.gallery_id = ? AND a.visibility IN ('published', 'public')").get(g.id) as { c: number }).c
+  const videos = (db.prepare("SELECT COUNT(*) c FROM media m JOIN albums a ON a.id = m.album_id WHERE a.gallery_id = ? AND a.visibility IN ('published', 'public') AND m.kind = 'video'").get(g.id) as { c: number }).c
   const members = (db.prepare('SELECT COUNT(*) c FROM gallery_access WHERE gallery_id = ?').get(g.id) as { c: number }).c
-  const publicAlbum = g.public_album_id ? (db.prepare('SELECT id, slug, title FROM albums WHERE id = ? AND gallery_id = ?').get(g.public_album_id, g.id) as { id: number; slug: string; title: string } | undefined) : undefined
+  const publicAlbum = g.public_album_id ? (db.prepare("SELECT id, slug, title FROM albums WHERE id = ? AND gallery_id = ? AND visibility = 'public'").get(g.public_album_id, g.id) as { id: number; slug: string; title: string } | undefined) : undefined
+  const previewRows = db.prepare("SELECT * FROM albums WHERE gallery_id = ? AND visibility IN ('published', 'public') ORDER BY featured DESC, updated_at DESC LIMIT 4").all(g.id) as Record<string, unknown>[]
+  const previews = previewRows
+    .map((a) => {
+      let c = a.cover_media_id ? (db.prepare('SELECT * FROM media WHERE id = ?').get(a.cover_media_id as number) as Record<string, unknown> | undefined) : undefined
+      if (!c) c = db.prepare('SELECT * FROM media WHERE album_id = ? ORDER BY sort_order LIMIT 1').get(a.id as number) as Record<string, unknown> | undefined
+      return c ? { albumId: a.id, albumSlug: a.slug, title: a.title, visibility: a.visibility, cover: mediaJson(c) } : null
+    })
+    .filter(Boolean)
   return {
     id: g.id,
     slug: g.slug,
@@ -21,8 +32,10 @@ export function galleryJson(g: GalleryRow, userId?: number) {
     themeId: g.theme_id,
     publicAlbumId: g.public_album_id,
     publicAlbum: publicAlbum ?? null,
-    counts: { albums, members },
+    previews,
+    counts: { albums, publicAlbums, media, videos, members },
     createdAt: g.created_at,
+    updatedAt: g.updated_at,
   }
 }
 
@@ -47,7 +60,8 @@ export function albumJson(row: Record<string, unknown>, userId?: number, opts: {
     visibility: row.visibility,
     restricted: !!row.restricted,
     allowedUserIds,
-    isPublic: gallery?.public_album_id === id,
+    isPublic: row.visibility === 'public',
+    isHook: gallery?.public_album_id === id,
     tags: parseJson<string[]>(row.tags, []),
     layoutOverride: row.layout_override ? parseJson(row.layout_override, null) : null,
     sortOrder: row.sort_order,

@@ -137,9 +137,11 @@ export function AlbumEditorPage() {
           <button className={`btn ${album.featured ? 'accent' : ''}`} onClick={() => patch.mutate({ featured: !album.featured })}>
             <Star size={14} fill={album.featured ? 'currentColor' : 'none'} /> {album.featured ? 'Featured' : 'Feature'}
           </button>
-          <button className={`btn ${album.visibility === 'published' ? '' : 'primary'}`} onClick={() => patch.mutate({ visibility: album.visibility === 'published' ? 'draft' : 'published' })}>
-            {album.visibility === 'published' ? 'Unpublish' : 'Publish'}
-          </button>
+          <select className="select" value={album.visibility} onChange={(e) => patch.mutate({ visibility: e.target.value })} style={{ width: 'auto' }} aria-label="Visibility">
+            <option value="draft">Draft (hidden)</option>
+            <option value="published">Members</option>
+            <option value="public">Public (no login)</option>
+          </select>
         </div>
       </div>
 
@@ -176,7 +178,7 @@ export function AlbumEditorPage() {
               {album.shareToken ? <span className="badge success">Public link on</span> : <span className="badge">Members only</span>}
             </div>
             <p className="muted small" style={{ margin: 0 }}>
-              A public link lets anyone view this album without signing in, even while it is a draft. Likes and comments stay members-only.
+              Set visibility to Public to list this album on the gallery's public page for anyone. A share link works for any visibility, including drafts.
             </p>
             {shareUrl && (
               <div className="row">
@@ -196,7 +198,7 @@ export function AlbumEditorPage() {
           <section className="card stack" style={{ gap: 'calc(var(--space) * 1.5)' }}>
             <div className="row between">
               <h3 style={{ margin: 0 }}>Who can see this album</h3>
-              {album.isPublic ? <span className="badge success">Public album</span> : restricted ? <span className="badge accent">Selected members</span> : <span className="badge">All gallery members</span>}
+              {album.isPublic ? <span className="badge success">{album.isHook ? 'Public hook' : 'Public'}</span> : restricted ? <span className="badge accent">Selected members</span> : <span className="badge">All gallery members</span>}
             </div>
             <label className="checkbox">
               <input type="checkbox" checked={restricted} onChange={(e) => { setRestricted(e.target.checked); setAccessDirty(true) }} /> <Lock size={14} /> Limit to selected members
@@ -205,8 +207,8 @@ export function AlbumEditorPage() {
               <CheckList options={memberOptions} selected={allowed} onChange={(ids) => { setAllowed(ids); setAccessDirty(true) }} emptyText="No members have access to this gallery yet. Add or generate members first." />
             )}
             <div className="row between">
-              <button className="btn sm" onClick={() => setPublic.mutate(!album.isPublic)} disabled={setPublic.isPending || (!album.isPublic && album.visibility !== 'published')} title={album.visibility !== 'published' ? 'Publish the album first' : ''}>
-                <Globe size={14} /> {album.isPublic ? 'Stop being the public album' : "Use as the gallery's public album"}
+              <button className="btn sm" onClick={() => setPublic.mutate(!album.isHook)} disabled={setPublic.isPending} title="The hook is the album shown first on the gallery's public page">
+                <Globe size={14} /> {album.isHook ? 'Remove as public hook' : 'Make this the public hook'}
               </button>
               <button className="btn primary sm" onClick={() => saveAccess.mutate()} disabled={!accessDirty || saveAccess.isPending}>
                 Save access

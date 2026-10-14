@@ -140,18 +140,18 @@ export function GallerySettingsPage() {
           </section>
           <section className="card stack" style={{ gap: 'calc(var(--space) * 2)' }}>
             <div className="row between">
-              <h3 style={{ margin: 0 }}>Public album</h3>
-              {g.publicAlbum ? <span className="badge success">Visible to everyone</span> : <span className="badge">None</span>}
+              <h3 style={{ margin: 0 }}>Public hook</h3>
+              {g.publicAlbum ? <span className="badge success">{g.counts.publicAlbums} public</span> : <span className="badge">No hook</span>}
             </div>
             <p className="muted small" style={{ margin: 0 }}>
-              One published album that anyone can view without an account, shown under the splash screen at the public link.
+              Every album set to Public is listed on the public page. The hook is the one shown first, under the splash. Choosing an album here makes it public.
             </p>
             <select className="select" value={draft.publicAlbumId ?? ''} onChange={(e) => setDraft({ ...draft, publicAlbumId: e.target.value ? Number(e.target.value) : null })}>
-              <option value="">No public album</option>
+              <option value="">Automatic (first public album)</option>
               {albums.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.title}
-                  {a.visibility === 'draft' ? ' (draft, publish it first)' : ''}
+                  {a.visibility === 'public' ? ' · public' : a.visibility === 'draft' ? ' · draft, will become public' : ' · members, will become public'}
                 </option>
               ))}
             </select>

@@ -66,9 +66,10 @@ function canView(req: import('express').Request, row: Record<string, unknown>): 
   // Public gallery landing: the gallery's designated public album, or its splash image.
   const gslug = typeof req.query.g === 'string' ? req.query.g : ''
   if (gslug) {
-    const g = db.prepare('SELECT public_album_id, splash_media_id FROM galleries WHERE slug = ?').get(gslug) as { public_album_id: number | null; splash_media_id: number | null } | undefined
-    if (g && ((g.public_album_id === album.id && album.visibility === 'published') || g.splash_media_id === row.id)) return true
+    const g = db.prepare('SELECT id, splash_media_id FROM galleries WHERE slug = ?').get(gslug) as { id: number; splash_media_id: number | null } | undefined
+    if (g && ((album.gallery_id === g.id && album.visibility === 'public') || g.splash_media_id === row.id)) return true
   }
+  if (album.visibility === 'public') return true
   if (!req.user) return false
   return canViewAlbum(req.user, album)
 }

@@ -10,7 +10,8 @@ import { AccountPage } from './pages/AccountPage'
 import { FavoritesPage } from './pages/FavoritesPage'
 import { SharePage } from './pages/SharePage'
 import { GalleryPage } from './pages/GalleryPage'
-import { PublicGalleryPage } from './pages/PublicGalleryPage'
+import { PublicAlbumPage, PublicDirectoryPage, PublicGalleryPage } from './pages/PublicGalleryPage'
+import { GalleriesPage } from './pages/GalleriesPage'
 import { GallerySettingsPage } from './pages/admin/GallerySettingsPage'
 import { AdminLayout } from './pages/admin/AdminLayout'
 import { DashboardPage } from './pages/admin/DashboardPage'
@@ -39,12 +40,15 @@ export default function App() {
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/s/:token" element={<SharePage />} />
+            <Route path="/public" element={<PublicDirectoryPage />} />
             <Route path="/public/:slug" element={<PublicGalleryPage />} />
+            <Route path="/public/:slug/:album" element={<PublicAlbumPage />} />
             <Route element={<RequireAuth />}>
               <Route element={<AppShell />}>
                 <Route index element={<HomePage />} />
                 <Route path="/album/:slug" element={<AlbumPage />} />
                 <Route path="/g/:slug" element={<GalleryPage />} />
+                <Route path="/galleries" element={<GalleriesPage />} />
                 <Route path="/favorites" element={<FavoritesPage />} />
                 <Route path="/account" element={<AccountPage />} />
                 <Route element={<RequireAuth role="admin" />}>

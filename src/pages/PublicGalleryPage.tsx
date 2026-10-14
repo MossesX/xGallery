@@ -1,41 +1,87 @@
 import { useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
-import { usePublicGallery, useSettings } from '../api/hooks'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { ArrowRight, Compass, Images } from 'lucide-react'
+import { usePublicAlbum, usePublicGalleries, usePublicGallery, useSettings } from '../api/hooks'
 import { MediaLayout } from '../components/MediaLayout'
 import { Lightbox } from '../components/Lightbox'
 import { PageLoader } from '../components/Skeleton'
-import { AmberMark, Wordmark } from '../brand/Logo'
-import { Toast } from '../components/Toast'
-import { ColorModeToggle } from '../components/ColorModeToggle'
 import { useGalleryTheme } from '../components/GalleryTheme'
+import { PublicShell } from '../components/PublicShell'
+import { GalleryTile } from '../components/GalleryTile'
+import { AlbumCard } from '../components/AlbumCard'
+import { PlayPanel } from '../components/PlayPanel'
+import type { MediaItem } from '../api/types'
 
-/** Login-free landing page for a gallery: its splash screen and its public album. */
+/** /public: directory of every gallery that has public albums. */
+export function PublicDirectoryPage() {
+  const { data, isLoading } = usePublicGalleries()
+  return (
+    <PublicShell>
+      <main className="page">
+        <section className="toolbar">
+          <div>
+            <div className="eyebrow">Open to everyone</div>
+            <h1 style={{ margin: 0 }}>Public galleries</h1>
+          </div>
+        </section>
+        {isLoading ? (
+          <PageLoader />
+        ) : !data?.length ? (
+          <div className="empty">
+            <Compass size={40} strokeWidth={1.2} />
+            <p style={{ marginTop: 12 }}>No public galleries yet.</p>
+          </div>
+        ) : (
+          <div className="gallery-browser">
+            {data.map((g) => (
+              <GalleryTile gallery={g} key={g.id} to={`/public/${g.slug}`} publicMode />
+            ))}
+          </div>
+        )}
+      </main>
+    </PublicShell>
+  )
+}
+
+function PublicMedia({ media, layout, allowDownloads }: { media: MediaItem[]; layout: Parameters<typeof MediaLayout>[0]['layout']; allowDownloads: boolean }) {
+  const [params, setParams] = useSearchParams()
+  const [open, setOpen] = useState<number | null>(null)
+  const videos = media.filter((m) => m.kind === 'video')
+  const playId = params.get('play') ? Number(params.get('play')) : null
+  const setPlay = (id: number | null) => {
+    const next = new URLSearchParams(params)
+    if (id == null) next.delete('play')
+    else next.set('play', String(id))
+    setParams(next, { replace: true })
+  }
+  const onOpen = (i: number) => {
+    const m = media[i]
+    if (m.kind === 'video' && videos.length) setPlay(m.id)
+    else setOpen(i)
+  }
+  return (
+    <>
+      {playId != null && videos.some((v) => v.id === playId) && (
+        <PlayPanel videos={videos} currentId={playId} onSelect={(id) => setPlay(id)} onClose={() => setPlay(null)} allowLikes={false} allowDownloads={allowDownloads} readOnly />
+      )}
+      <MediaLayout items={media} layout={{ ...layout, showLikes: false, heroCover: false }} onOpen={onOpen} />
+      {open != null && <Lightbox items={media} index={open} onClose={() => setOpen(null)} onNavigate={setOpen} allowComments={false} allowLikes={false} allowDownloads={allowDownloads} readOnly />}
+    </>
+  )
+}
+
+/** /public/:slug: a gallery's splash, its hook album and all of its public albums. */
 export function PublicGalleryPage() {
   const { slug } = useParams()
   const { data: site } = useSettings()
   const { data, isLoading, error } = usePublicGallery(slug)
-  const [open, setOpen] = useState<number | null>(null)
   useGalleryTheme(data?.theme)
 
   if (isLoading || !site) return <PageLoader />
   const layout = data?.album?.layoutOverride ?? site.settings.defaultLayout
 
   return (
-    <div className="shell">
-      <header className="topbar">
-        <div className="topbar-inner">
-          <Link to="/" className="brand">
-            <AmberMark size={34} />
-            <Wordmark title={site.settings.siteTitle} brand={site.settings.brandName} />
-          </Link>
-          <nav className="nav">
-            <ColorModeToggle />
-            <Link to="/login" className="btn primary sm">
-              Member sign in
-            </Link>
-          </nav>
-        </div>
-      </header>
+    <PublicShell>
       <main className="page">
         {error || !data ? (
           <div className="empty">
@@ -56,30 +102,77 @@ export function PublicGalleryPage() {
               <>
                 <section className="toolbar">
                   <div>
-                    <div className="eyebrow">Public album</div>
+                    <div className="eyebrow">Featured public album</div>
                     <h2 style={{ margin: 0 }}>{data.album.title}</h2>
                     {data.album.description && <p className="muted" style={{ margin: '6px 0 0', maxWidth: 720 }}>{data.album.description}</p>}
                   </div>
+                  <Link to={`/public/${data.gallery.slug}/${data.album.slug}`} className="btn sm">
+                    Open album <ArrowRight size={14} />
+                  </Link>
                 </section>
-                <MediaLayout items={data.media} layout={{ ...layout, showLikes: false, heroCover: false }} onOpen={setOpen} />
-                {open != null && (
-                  <Lightbox items={data.media} index={open} onClose={() => setOpen(null)} onNavigate={setOpen} allowComments={false} allowLikes={false} allowDownloads={site.settings.allowDownloads} readOnly />
-                )}
+                <PublicMedia media={data.media} layout={layout} allowDownloads={site.settings.allowDownloads} />
               </>
             ) : (
-              <div className="empty">This gallery has no public album yet. Members can sign in to see more.</div>
+              <div className="empty">This gallery has no public albums yet. Members can sign in to see more.</div>
+            )}
+            {data.albums.length > 1 && (
+              <>
+                <section className="toolbar" style={{ marginTop: 'calc(var(--space) * 5)' }}>
+                  <div>
+                    <div className="eyebrow">More from this gallery</div>
+                    <h2 style={{ margin: 0 }}>Public albums</h2>
+                  </div>
+                  <span className="chip">
+                    <Images size={11} /> {data.albums.length} albums
+                  </span>
+                </section>
+                <div className="album-grid">
+                  {data.albums
+                    .filter((a) => a.id !== data.album?.id)
+                    .map((a) => (
+                      <AlbumCard album={a} key={a.id} to={`/public/${data.gallery.slug}/${a.slug}`} publicMode />
+                    ))}
+                </div>
+              </>
             )}
           </>
         )}
       </main>
-      <footer className="footer">
-        <div className="footer-inner">
-          <span>
-            {site.settings.siteTitle} · {site.settings.tagline}
-          </span>
-        </div>
-      </footer>
-      <Toast />
-    </div>
+    </PublicShell>
+  )
+}
+
+/** /public/:slug/:album: one public album, login-free. */
+export function PublicAlbumPage() {
+  const { slug, album } = useParams()
+  const { data: site } = useSettings()
+  const { data, isLoading, error } = usePublicAlbum(slug, album)
+  useGalleryTheme(data?.theme)
+  if (isLoading || !site) return <PageLoader />
+  const layout = data?.album.layoutOverride ?? site.settings.defaultLayout
+  return (
+    <PublicShell>
+      <main className="page">
+        {error || !data ? (
+          <div className="empty">
+            <p>This album is not available.</p>
+          </div>
+        ) : (
+          <>
+            <div className="row between" style={{ marginBottom: 'calc(var(--space) * 2)' }}>
+              <Link to={`/public/${data.gallery.slug}`} className="btn ghost sm">
+                ← {data.gallery.title}
+              </Link>
+            </div>
+            <header className="album-header">
+              <div className="eyebrow">Public album · {data.gallery.owner?.displayName}</div>
+              <h1>{data.album.title}</h1>
+              {data.album.description && <p className="muted lead" style={{ maxWidth: 720 }}>{data.album.description}</p>}
+            </header>
+            <PublicMedia media={data.media} layout={layout} allowDownloads={site.settings.allowDownloads} />
+          </>
+        )}
+      </main>
+    </PublicShell>
   )
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Eye, EyeOff, GripVertical, Plus, Star, Trash2 } from 'lucide-react'
+import { GripVertical, Plus, Star, Trash2 } from 'lucide-react'
 import { api } from '../../api/client'
 import { useAlbums, useMe } from '../../api/hooks'
 import type { Album } from '../../api/types'
@@ -110,7 +110,7 @@ export function AlbumsPage() {
                           {a.title}
                         </Link>
                         <div className="muted small">
-                          /album/{a.slug} {a.featured && <span className="badge accent">Featured</span>} {a.isPublic && <span className="badge success">Public</span>}
+                          /album/{a.slug} {a.featured && <span className="badge accent">Featured</span>}
                           {a.restricted && <span className="badge">Restricted</span>}
                           {me?.role === 'owner' && a.gallery && <span className="badge primary">{a.gallery.title}</span>}
                         </div>
@@ -122,15 +122,17 @@ export function AlbumsPage() {
                     {a.counts.videos > 0 && <span className="muted small"> · {a.counts.videos} video</span>}
                   </td>
                   <td>{a.layoutOverride ? <span className="badge accent">{a.layoutOverride.kind} (override)</span> : <span className="badge">Default</span>}</td>
-                  <td>{a.visibility === 'published' ? <span className="badge success">Published</span> : <span className="badge">Draft</span>}</td>
+                  <td>{a.visibility === 'public' ? <span className="badge success">Public{a.isHook ? ' hook' : ''}</span> : a.visibility === 'published' ? <span className="badge primary">Members</span> : <span className="badge">Draft</span>}</td>
                   <td>
                     <div className="row" style={{ justifyContent: 'flex-end', gap: 2 }}>
                       <button className="btn ghost icon sm" title={a.featured ? 'Unfeature' : 'Feature on home'} onClick={() => patch.mutate({ id: a.id, patch: { featured: !a.featured } })}>
                         <Star size={14} fill={a.featured ? 'currentColor' : 'none'} />
                       </button>
-                      <button className="btn ghost icon sm" title={a.visibility === 'published' ? 'Unpublish' : 'Publish'} onClick={() => patch.mutate({ id: a.id, patch: { visibility: a.visibility === 'published' ? 'draft' : 'published' } })}>
-                        {a.visibility === 'published' ? <EyeOff size={14} /> : <Eye size={14} />}
-                      </button>
+                      <select className="select" value={a.visibility} onChange={(e) => patch.mutate({ id: a.id, patch: { visibility: e.target.value } })} style={{ width: 'auto', padding: '3px 6px' }} aria-label="Visibility">
+                        <option value="draft">Draft</option>
+                        <option value="published">Members</option>
+                        <option value="public">Public</option>
+                      </select>
                       <button className="btn ghost icon sm danger" title="Delete" onClick={() => confirm(`Delete "${a.title}" and all its media? This cannot be undone.`) && remove.mutate(a.id)}>
                         <Trash2 size={14} />
                       </button>
