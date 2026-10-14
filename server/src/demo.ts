@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { randomBytes } from 'node:crypto'
 import { db, getSetting, MEDIA_DIR, now, setSetting } from './db.js'
@@ -334,6 +334,30 @@ function uniqueAlbumSlug(base: string): string {
   let n = 2
   while (db.prepare('SELECT id FROM albums WHERE slug = ?').get(slug)) slug = `${root}-${n++}`
   return slug
+}
+
+/**
+ * Remove the demo community once from any data directory it was seeded into: the demo accounts
+ * (matched by username, only when this database recorded the seed), their galleries, albums, media
+ * files, likes, comments, buddies and messages. Real accounts are never touched.
+ */
+export function removeDemoCommunity(): void {
+  if (!getSetting<boolean>('demoSeeded', false) || getSetting<boolean>('demoRemoved', false)) return
+  const names = PEOPLE.map((p) => p.username)
+  const marks = names.map(() => '?').join(',')
+  const users = db.prepare(`SELECT id FROM users WHERE username IN (${marks})`).all(...names) as { id: number }[]
+  const ids = users.map((u) => u.id)
+  if (ids.length) {
+    const idMarks = ids.map(() => '?').join(',')
+    const galleries = db.prepare(`SELECT id FROM galleries WHERE owner_user_id IN (${idMarks})`).all(...ids) as { id: number }[]
+    for (const g of galleries) db.prepare('DELETE FROM albums WHERE gallery_id = ?').run(g.id)
+    // Sessions, likes, favorites, comments, gallery access, buddies, messages and galleries cascade from users.
+    db.prepare(`DELETE FROM users WHERE id IN (${idMarks})`).run(...ids)
+  }
+  db.prepare("DELETE FROM media WHERE file_path LIKE 'demo/%'").run()
+  rmSync(path.join(MEDIA_DIR, 'demo'), { recursive: true, force: true })
+  setSetting('demoRemoved', true)
+  console.log(`Removed ${ids.length} demo accounts`)
 }
 
 export function seedDemoCommunity(): void {

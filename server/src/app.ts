@@ -3,7 +3,7 @@ import path from 'node:path'
 import { existsSync } from 'node:fs'
 import { attachUser, pruneSessions } from './auth.js'
 import { ensureSeeded } from './seed.js'
-import { seedDemoCommunity } from './demo.js'
+import { removeDemoCommunity, seedDemoCommunity } from './demo.js'
 import { HttpError } from './util.js'
 import { authRouter } from './routes/auth.js'
 import { usersRouter } from './routes/users.js'
@@ -15,7 +15,9 @@ import { galleriesRouter, publicRouter } from './routes/galleries.js'
 import { socialRouter } from './routes/social.js'
 
 ensureSeeded()
-seedDemoCommunity()
+// The demo community is opt-in for development (XG_DEMO=1); production data stays real.
+if (process.env.XG_DEMO === '1') seedDemoCommunity()
+else removeDemoCommunity()
 pruneSessions()
 setInterval(pruneSessions, 6 * 3600 * 1000).unref()
 
