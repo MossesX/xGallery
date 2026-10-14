@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
-import { Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useLogin, useMe, useSettings } from '../api/hooks'
-import { ColorModeToggle } from '../components/ColorModeToggle'
+import { PublicShell } from '../components/PublicShell'
 import { AmberMark } from '../brand/Logo'
 
 export function LoginPage() {
@@ -27,38 +27,16 @@ export function LoginPage() {
     }
   }
 
-  const s = data?.settings
-
   return (
-    <div className="login-wrap">
-      <section className="login-hero">
-        <div className="login-hero-art" aria-hidden="true">
-          <span className="orb orb-a" />
-          <span className="orb orb-b" />
-          <span className="grid-lines" />
-        </div>
-        <div className="login-hero-content">
-          <div className="row" style={{ gap: 12, marginBottom: 28 }}>
-            <AmberMark size={44} />
-            <span className="eyebrow" style={{ color: 'var(--c-text)' }}>{s?.brandName ?? 'AmberX'}</span>
-          </div>
-          <h1>{s?.siteTitle ?? 'xGallery'}</h1>
-          <p className="lead">{s?.tagline ?? 'Curated visual stories.'}</p>
-          <ul className="login-points">
-            <li>Private, invitation-only galleries</li>
-            <li>Photography and film in full resolution</li>
-            <li>React, save and discuss with the community</li>
-          </ul>
-        </div>
-      </section>
-      <section className="login-form">
-        <form className="card pad-lg stack" onSubmit={submit} style={{ gap: 'calc(var(--space) * 2)' }}>
-          <div className="row between">
+    <PublicShell>
+      <main className="page login-page">
+        <form className="card pad-lg stack login-card" onSubmit={submit} style={{ gap: 'calc(var(--space) * 2)' }}>
+          <div className="row" style={{ gap: 12 }}>
+            <AmberMark size={40} accent="#ff7a1a" />
             <div>
-              <div className="eyebrow">Members</div>
+              <div className="eyebrow">{data?.settings.brandName ?? 'AmberX'} members</div>
               <h2 style={{ margin: 0 }}>Sign in</h2>
             </div>
-            <ColorModeToggle />
           </div>
           {login.error && <div className="error">{login.error.message}</div>}
           <div className="field">
@@ -73,10 +51,10 @@ export function LoginPage() {
             {login.isPending ? 'Signing in…' : 'Sign in'}
           </button>
           <p className="muted small" style={{ margin: 0 }}>
-            No account? Access is granted by the gallery administrator.
+            No account? Access is granted by a gallery administrator. You can still <Link to="/">browse public albums</Link>.
           </p>
         </form>
-      </section>
-    </div>
+      </main>
+    </PublicShell>
   )
 }

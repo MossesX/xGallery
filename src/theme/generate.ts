@@ -105,9 +105,9 @@ export const AMBERX_FALLBACK: ThemeDraft = {
     danger: '#c0392b', success: '#2f8f66',
   },
   dark: {
-    bg: '#131110', bgElevated: '#1c1916', surface: '#1c1916', surfaceHover: '#252119', border: '#342e26',
-    text: '#f5efe6', textMuted: '#9b8f81', primary: '#ff8a2a', primaryText: '#1a120a', accent: '#f5b342', accentText: '#1a120a',
-    danger: '#ff5c5c', success: '#3fb27f',
+    bg: '#0f0d0b', bgElevated: '#1a1713', surface: '#1a1713', surfaceHover: '#241f19', border: '#2a2621',
+    text: '#f7f2ea', textMuted: '#9c9083', primary: '#ff7a1a', primaryText: '#0f0d0b', accent: '#4f8ef7', accentText: '#ffffff',
+    danger: '#e5484d', success: '#3fb27f',
   },
   fontDisplay: 'Outfit',
   fontBody: 'IBM Plex Sans',

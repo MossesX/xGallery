@@ -37,15 +37,15 @@
 }
 
 :root[data-mode='dark']:not([data-themed]) {
-  --c-bg: #131110;
-  --c-bg-elevated: #1c1916;
-  --c-surface: #1c1916;
-  --c-surface-hover: #252119;
-  --c-border: #342e26;
-  --c-text: #f5efe6;
-  --c-text-muted: #9b8f81;
-  --c-primary: #ff8a2a;
-  --c-primary-text: #1a120a;
+  --c-bg: #0f0d0b;
+  --c-bg-elevated: #1a1713;
+  --c-surface: #1a1713;
+  --c-surface-hover: #241f19;
+  --c-border: #2a2621;
+  --c-text: #f7f2ea;
+  --c-text-muted: #9c9083;
+  --c-primary: #ff7a1a;
+  --c-primary-text: #0f0d0b;
 }
 :root[data-mode='dark'] {
   --c-stage: #0d0b09;
@@ -1117,3 +1117,58 @@ img.is-loaded { opacity: 1; transition: opacity 0.2s var(--ease); }
 .gallery-tile .strip img { width: 100%; height: 100%; object-fit: cover; }
 .gallery-tile .meta { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 0.82rem; color: var(--c-text-muted); flex-wrap: wrap; }
 .gallery-tile .owner { display: flex; align-items: center; gap: 8px; }
+
+
+/* ---------- AmberX banner (from the amberxai.com top bar) ---------- */
+.banner {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: var(--c-surface);
+  border-bottom: 1px solid var(--c-border);
+}
+.banner-inner {
+  max-width: 1440px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 16px;
+  min-height: 54px;
+}
+.banner-brand { display: flex; align-items: center; gap: 10px; color: var(--c-text); flex-shrink: 0; }
+.banner-brand:hover { text-decoration: none; }
+.banner-logo { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; background: color-mix(in srgb, var(--c-primary) 14%, transparent); }
+.banner-word { display: flex; flex-direction: column; line-height: 1.05; }
+.banner-amberx { font-family: var(--font-display); font-weight: 800; font-size: 1.05rem; letter-spacing: -0.01em; }
+.banner-amberx .x { color: var(--c-primary); }
+.banner-product { font-family: var(--font-mono); font-size: 0.62rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--c-text-muted); }
+.banner-nav { display: flex; gap: 2px; align-items: center; }
+.banner-nav a { display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border-radius: 999px; color: var(--c-text-muted); font-size: 0.86rem; font-weight: 600; }
+.banner-nav a:hover { color: var(--c-text); background: var(--c-surface-hover); text-decoration: none; }
+.banner-nav a.active { color: var(--c-primary); background: var(--c-primary-soft); }
+.banner-search { flex: 1 1 200px; max-width: 360px; margin-left: auto; }
+.banner-right { display: flex; align-items: center; gap: 10px; margin-left: auto; flex-shrink: 0; }
+.banner-search + .banner-right { margin-left: 0; }
+.clock { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.1; font-family: var(--font-mono); padding-right: 10px; border-right: 1px solid var(--c-border); }
+.clock-date { font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--c-text-muted); }
+.clock-time { font-size: 0.86rem; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--c-text); }
+.banner-user { display: inline-flex; align-items: center; gap: 8px; color: var(--c-text); font-weight: 600; font-size: 0.86rem; padding: 2px 8px 2px 2px; border-radius: 999px; }
+.banner-user:hover { background: var(--c-surface-hover); text-decoration: none; }
+.banner-user.active { background: var(--c-primary-soft); }
+.footer a { color: var(--c-text); font-weight: 600; }
+.landing-hero { min-height: 420px; }
+.landing-signin { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.2); color: #fff; }
+.landing-signin:hover { background: rgba(255, 255, 255, 0.18); }
+.login-page { display: grid; place-items: center; min-height: calc(100vh - 140px); }
+.login-card { width: 100%; max-width: 420px; }
+@media (max-width: 1000px) {
+  .banner-inner { flex-wrap: wrap; }
+  .banner-search { order: 5; flex-basis: 100%; max-width: none; }
+  .clock { display: none; }
+  .banner-username { display: none; }
+}
+@media (max-width: 640px) {
+  .banner-nav a { padding: 6px 8px; font-size: 0.8rem; }
+  .banner-product { display: none; }
+}

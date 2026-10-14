@@ -12,6 +12,9 @@ import { SharePage } from './pages/SharePage'
 import { GalleryPage } from './pages/GalleryPage'
 import { PublicAlbumPage, PublicDirectoryPage, PublicGalleryPage } from './pages/PublicGalleryPage'
 import { GalleriesPage } from './pages/GalleriesPage'
+import { PublicHomePage } from './pages/PublicHomePage'
+import { useMe } from './api/hooks'
+import { PageLoader } from './components/Skeleton'
 import { GallerySettingsPage } from './pages/admin/GallerySettingsPage'
 import { AdminLayout } from './pages/admin/AdminLayout'
 import { DashboardPage } from './pages/admin/DashboardPage'
@@ -32,12 +35,25 @@ const queryClient = new QueryClient({
   },
 })
 
+/** The root: anonymous visitors browse public albums; members get their home. */
+function Root() {
+  const { data: user, isLoading } = useMe()
+  if (isLoading) return <PageLoader />
+  if (!user) return <PublicHomePage />
+  return (
+    <AppShell>
+      <HomePage />
+    </AppShell>
+  )
+}
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <BrowserRouter>
           <Routes>
+            <Route path="/" element={<Root />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/s/:token" element={<SharePage />} />
             <Route path="/public" element={<PublicDirectoryPage />} />
@@ -45,7 +61,6 @@ export default function App() {
             <Route path="/public/:slug/:album" element={<PublicAlbumPage />} />
             <Route element={<RequireAuth />}>
               <Route element={<AppShell />}>
-                <Route index element={<HomePage />} />
                 <Route path="/album/:slug" element={<AlbumPage />} />
                 <Route path="/g/:slug" element={<GalleryPage />} />
                 <Route path="/galleries" element={<GalleriesPage />} />

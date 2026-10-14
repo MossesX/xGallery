@@ -20,7 +20,7 @@ interface UIState {
 export const useUI = create<UIState>()(
   persist(
     (set) => ({
-      colorMode: 'system',
+      colorMode: 'dark',
       setColorMode: (colorMode) => set({ colorMode }),
       previewTheme: null,
       setPreviewTheme: (previewTheme) => set({ previewTheme }),

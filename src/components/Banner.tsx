@@ -1,0 +1,117 @@
+import { useEffect, useState, type FormEvent } from 'react'
+import { Link, NavLink, useNavigate, useSearchParams } from 'react-router-dom'
+import { Bookmark, LogIn, LogOut, Search, Settings2 } from 'lucide-react'
+import { useLogout, useMe, useSettings } from '../api/hooks'
+import { ColorModeToggle } from './ColorModeToggle'
+import { AmberMark } from '../brand/Logo'
+import { Avatar } from './Avatar'
+
+function Clock() {
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(t)
+  }, [])
+  return (
+    <div className="clock" aria-live="off" title={now.toLocaleString()}>
+      <span className="clock-date">{now.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}</span>
+      <span className="clock-time">{now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+    </div>
+  )
+}
+
+/** The AmberX toolbar shared by every page: mark, wordmark, navigation, live clock, theme and sign-in. */
+export function Banner() {
+  const { data: user } = useMe()
+  const { data } = useSettings()
+  const logout = useLogout()
+  const navigate = useNavigate()
+  const [params] = useSearchParams()
+  const [q, setQ] = useState(params.get('q') ?? '')
+  useEffect(() => setQ(params.get('q') ?? ''), [params])
+  const s = data?.settings
+
+  const search = (e: FormEvent) => {
+    e.preventDefault()
+    navigate(q.trim() ? `/?q=${encodeURIComponent(q.trim())}` : '/')
+  }
+
+  return (
+    <header className="banner">
+      <div className="banner-inner">
+        <Link to="/" className="banner-brand" aria-label={s?.brandName ?? 'AmberX'}>
+          <span className="banner-logo">
+            <AmberMark size={30} accent="#ff7a1a" />
+          </span>
+          <span className="banner-word">
+            <span className="banner-amberx">
+              Amber<span className="x">X</span>
+            </span>
+            <span className="banner-product">{s?.siteTitle ?? 'xGallery'}</span>
+          </span>
+        </Link>
+        <nav className="banner-nav">
+          <NavLink to="/" end>
+            {user ? 'Home' : 'Explore'}
+          </NavLink>
+          <NavLink to={user ? '/galleries' : '/public'}>Galleries</NavLink>
+          {user && (
+            <NavLink to="/favorites">
+              <Bookmark size={13} /> Saved
+            </NavLink>
+          )}
+          {(user?.role === 'admin' || user?.role === 'owner') && (
+            <NavLink to="/admin">
+              <Settings2 size={13} /> Admin
+            </NavLink>
+          )}
+        </nav>
+        {user && (
+          <form className="search banner-search" onSubmit={search} role="search">
+            <Search size={15} />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search albums, tags…" aria-label="Search" />
+          </form>
+        )}
+        <div className="banner-right">
+          <Clock />
+          <ColorModeToggle />
+          {user ? (
+            <>
+              <NavLink to="/account" className="banner-user" title={`${user.display_name} · Account`}>
+                <Avatar name={user.display_name} size={28} />
+                <span className="banner-username">{user.display_name.split(' ')[0]}</span>
+              </NavLink>
+              <button className="btn sm" onClick={() => logout.mutateAsync().then(() => navigate('/'))} title="Sign out">
+                <LogOut size={13} /> Sign out
+              </button>
+            </>
+          ) : (
+            <Link to="/login" className="btn primary sm banner-login">
+              <LogIn size={13} /> Sign in
+            </Link>
+          )}
+        </div>
+      </div>
+    </header>
+  )
+}
+
+export function Footer() {
+  const { data: user } = useMe()
+  const { data } = useSettings()
+  const s = data?.settings
+  return (
+    <footer className="footer">
+      <div className="footer-inner">
+        <span className="row" style={{ gap: 8 }}>
+          <AmberMark size={16} accent="#ff7a1a" /> {s?.siteTitle ?? 'xGallery'} · {s?.tagline}
+        </span>
+        <span className="row" style={{ gap: 14 }}>
+          <Link to="/public">Public galleries</Link>
+          {user ? <Link to="/account">Account</Link> : <Link to="/login">Member sign in</Link>}
+          <span className="muted">Powered by {s?.brandName ?? 'AmberX'}</span>
+        </span>
+      </div>
+    </footer>
+  )
+}

@@ -14,7 +14,7 @@
       // Apply the persisted colour mode before first paint to avoid a light flash in dark mode.
       try {
         var ui = JSON.parse(localStorage.getItem('xgallery-ui') || '{}');
-        var mode = (ui.state && ui.state.colorMode) || 'system';
+        var mode = (ui.state && ui.state.colorMode) || 'dark';
         if (mode === 'system') mode = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
         document.documentElement.dataset.mode = mode;
         document.documentElement.style.colorScheme = mode;

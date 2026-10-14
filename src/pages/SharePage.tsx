@@ -1,12 +1,10 @@
 import { useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { useSettings, useShare } from '../api/hooks'
 import { MediaLayout } from '../components/MediaLayout'
 import { Lightbox } from '../components/Lightbox'
 import { PageLoader } from '../components/Skeleton'
-import { AmberMark, Wordmark } from '../brand/Logo'
-import { Toast } from '../components/Toast'
-import { ColorModeToggle } from '../components/ColorModeToggle'
+import { PublicShell } from '../components/PublicShell'
 
 /** Login-free view of an album through its share token. */
 export function SharePage() {
@@ -20,21 +18,7 @@ export function SharePage() {
   const layout = data?.album.layoutOverride ?? site.settings.defaultLayout
 
   return (
-    <div className="shell">
-      <header className="topbar">
-        <div className="topbar-inner">
-          <Link to="/" className="brand">
-            <AmberMark size={34} />
-            <Wordmark title={site.settings.siteTitle} brand={site.settings.brandName} />
-          </Link>
-          <nav className="nav">
-            <ColorModeToggle />
-            <Link to="/login" className="btn primary sm">
-              Sign in
-            </Link>
-          </nav>
-        </div>
-      </header>
+    <PublicShell>
       <main className="page">
         {error || !data ? (
           <div className="empty">
@@ -54,12 +38,6 @@ export function SharePage() {
           </>
         )}
       </main>
-      <footer className="footer">
-        <div className="footer-inner">
-          <span>{site.settings.siteTitle} · {site.settings.tagline}</span>
-        </div>
-      </footer>
-      <Toast />
-    </div>
+    </PublicShell>
   )
 }
