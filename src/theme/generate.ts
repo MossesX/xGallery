@@ -2,8 +2,8 @@ import type { Palette, ThemeDraft } from '../api/types'
 import { hslToHex, readableOn, type HSL } from './color'
 
 export const FONT_CHOICES = {
-  display: ['Sora', 'Playfair Display', 'Cormorant Garamond', 'Space Grotesk', 'DM Sans', 'Inter'],
-  body: ['Inter', 'DM Sans', 'Space Grotesk', 'Sora'],
+  display: ['Outfit', 'Sora', 'Playfair Display', 'Cormorant Garamond', 'Space Grotesk', 'DM Sans'],
+  body: ['IBM Plex Sans', 'Inter', 'DM Sans', 'Space Grotesk'],
 } as const
 
 type Harmony = 'complementary' | 'analogous' | 'triadic' | 'split' | 'monochrome'
@@ -98,19 +98,19 @@ export function rollTheme(): ThemeDraft {
 }
 
 export const AMBERX_FALLBACK: ThemeDraft = {
-  name: 'AmberX',
+  name: 'AmberX Studio',
   light: {
-    bg: '#f6f3ee', bgElevated: '#ffffff', surface: '#ffffff', surfaceHover: '#f1ebe2', border: '#e4dccf',
-    text: '#1f2329', textMuted: '#6b7280', primary: '#e8821e', primaryText: '#ffffff', accent: '#2563eb', accentText: '#ffffff',
-    danger: '#d83a31', success: '#2e9e54',
+    bg: '#f6f1e8', bgElevated: '#fffdf9', surface: '#fffdf9', surfaceHover: '#efe8db', border: '#dcd2c1',
+    text: '#1d1a16', textMuted: '#77695a', primary: '#c8590f', primaryText: '#ffffff', accent: '#b57414', accentText: '#ffffff',
+    danger: '#c0392b', success: '#2f8f66',
   },
   dark: {
-    bg: '#14100b', bgElevated: '#1c160d', surface: '#1f1810', surfaceHover: '#2a2114', border: '#352a18',
-    text: '#f0e8da', textMuted: '#a89878', primary: '#f0b54a', primaryText: '#160f06', accent: '#d99524', accentText: '#160f06',
-    danger: '#ef6b63', success: '#4cc98c',
+    bg: '#131110', bgElevated: '#1c1916', surface: '#1c1916', surfaceHover: '#252119', border: '#342e26',
+    text: '#f5efe6', textMuted: '#9b8f81', primary: '#ff8a2a', primaryText: '#1a120a', accent: '#f5b342', accentText: '#1a120a',
+    danger: '#ff5c5c', success: '#3fb27f',
   },
-  fontDisplay: 'Sora',
-  fontBody: 'Inter',
+  fontDisplay: 'Outfit',
+  fontBody: 'IBM Plex Sans',
   radius: 14,
   scale: 1,
 }

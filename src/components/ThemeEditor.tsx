@@ -36,7 +36,7 @@ function PaletteFields({ palette, onChange }: { palette: Palette; onChange: (p: 
 export function ThemePreview({ theme, mode }: { theme: ThemeDraft; mode: 'light' | 'dark' }) {
   const vars = {
     ...paletteToVars(mode === 'dark' ? theme.dark : theme.light),
-    '--font-display': `'${theme.fontDisplay}', 'Sora', sans-serif`,
+    '--font-display': `'${theme.fontDisplay}', 'Outfit', sans-serif`,
     '--font-body': `'${theme.fontBody}', sans-serif`,
     '--radius': `${theme.radius}px`,
     '--radius-sm': `${Math.max(2, theme.radius / 2)}px`,

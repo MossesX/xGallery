@@ -39,8 +39,8 @@ export function paletteToVars(p: Palette): Record<string, string> {
 export function themeToVars(theme: ThemeDraft, mode: 'light' | 'dark'): Record<string, string> {
   return {
     ...paletteToVars(mode === 'dark' ? theme.dark : theme.light),
-    '--font-display': `'${theme.fontDisplay}', 'Sora', sans-serif`,
-    '--font-body': `'${theme.fontBody}', system-ui, sans-serif`,
+    '--font-display': `'${theme.fontDisplay}', 'Outfit', ui-sans-serif, system-ui, sans-serif`,
+    '--font-body': `'${theme.fontBody}', 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif`,
     '--radius': `${theme.radius}px`,
     '--radius-sm': `${Math.max(2, theme.radius / 2)}px`,
     '--scale': String(theme.scale),

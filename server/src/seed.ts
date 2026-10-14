@@ -18,11 +18,18 @@ export function ensureSeeded(): void {
       now(),
     )
   }
-  const themes = (db.prepare('SELECT COUNT(*) c FROM themes').get() as { c: number }).c
-  if (themes === 0) {
-    const ins = db.prepare('INSERT INTO themes(name, light, dark, font_display, font_body, radius, scale, built_in, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)')
-    BRAND_THEMES.forEach((t, i) => ins.run(t.name, JSON.stringify(t.light), JSON.stringify(t.dark), t.fontDisplay, t.fontBody, t.radius, t.scale, now() + i))
-  }
+  // Built-in themes track the AmberX brand definitions: insert missing ones and refresh existing built-ins.
+  const ins = db.prepare('INSERT INTO themes(name, light, dark, font_display, font_body, radius, scale, built_in, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)')
+  const upd = db.prepare('UPDATE themes SET light = ?, dark = ?, font_display = ?, font_body = ?, radius = ?, scale = ? WHERE id = ?')
+  const builtIns = db.prepare('SELECT id, name FROM themes WHERE built_in = 1 ORDER BY created_at').all() as { id: number; name: string }[]
+  const legacy = ['AmberX', 'Amber Noir', 'Azure Studio']
+  BRAND_THEMES.forEach((t, i) => {
+    const existing = builtIns.find((b) => b.name === t.name) ?? builtIns.find((b) => b.name === legacy[i])
+    if (existing) {
+      upd.run(JSON.stringify(t.light), JSON.stringify(t.dark), t.fontDisplay, t.fontBody, t.radius, t.scale, existing.id)
+      if (existing.name !== t.name) db.prepare('UPDATE themes SET name = ? WHERE id = ?').run(t.name, existing.id)
+    } else ins.run(t.name, JSON.stringify(t.light), JSON.stringify(t.dark), t.fontDisplay, t.fontBody, t.radius, t.scale, now() + i)
+  })
   // Promote the first administrator to owner when upgrading from the single-admin schema.
   if (!db.prepare("SELECT 1 FROM users WHERE role = 'owner'").get()) {
     const first = db.prepare("SELECT id FROM users WHERE role = 'admin' ORDER BY created_at LIMIT 1").get() as { id: number } | undefined

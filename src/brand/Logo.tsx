@@ -20,11 +20,17 @@ export function AmberMark({ size = 32, accent = 'var(--c-primary)' }: { size?: n
   )
 }
 
+/** Renders the brand's signature: every capital or leading "x"/"X" in amber, as on the AmberX sites. */
+function accentX(text: string) {
+  const parts = text.split(/(X|^x)/)
+  return parts.map((p, i) => (p === 'X' || (p === 'x' && i === 1) ? <span className="x" key={i}>{p}</span> : p))
+}
+
 export function Wordmark({ title, brand }: { title: string; brand: string }) {
   return (
     <span className="wordmark">
-      <span className="wordmark-title">{title}</span>
-      <span className="wordmark-by">by {brand}</span>
+      <span className="wordmark-title">{accentX(title)}</span>
+      <span className="wordmark-by">by {accentX(brand)}</span>
     </span>
   )
 }
