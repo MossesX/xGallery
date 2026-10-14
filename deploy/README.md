@@ -12,6 +12,14 @@ front for automatic HTTPS. Everything lives in `docker-compose.yml`.
    DNS provider.
 3. **Ports 80 and 443 open** on the VPS firewall (hPanel -> VPS -> Firewall).
 
+## Current production setup
+
+The VPS at 31.97.13.252 runs Coolify, whose Traefik proxy owns ports 80 and 443. The gallery is
+deployed with `docker-compose.traefik.yml`: the container joins the `coolify` network and carries
+Traefik labels for `xgallery.amberxai.com`, so Traefik routes the hostname and issues the
+certificate. The deploy workflow picks this automatically when it finds the `coolify` network, and
+falls back to the standalone Caddy stack otherwise.
+
 ## Option A: GitHub Actions (recommended, continuous)
 
 `.github/workflows/deploy.yml` copies the source to the VPS (31.97.13.252), builds the image
