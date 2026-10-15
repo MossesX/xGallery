@@ -2,7 +2,7 @@ import express, { type Request, type Response, type NextFunction } from 'express
 import path from 'node:path'
 import { existsSync } from 'node:fs'
 import { attachUser, pruneSessions } from './auth.js'
-import { ensureSeeded } from './seed.js'
+import { applyOwnerPasswordReset, ensureSeeded } from './seed.js'
 import { removeDemoCommunity, seedDemoCommunity } from './demo.js'
 import { HttpError } from './util.js'
 import { getPolicy } from './policy.js'
@@ -28,6 +28,7 @@ import { attachDev, sweepDevSessions } from './dev.js'
 import { adminRouter } from './routes/admin.js'
 
 ensureSeeded()
+applyOwnerPasswordReset()
 // The demo community is opt-in for development (XG_DEMO=1); production data stays real.
 if (process.env.XG_DEMO === '1') seedDemoCommunity()
 else removeDemoCommunity()

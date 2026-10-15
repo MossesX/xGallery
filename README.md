@@ -55,6 +55,11 @@ site. Members sign in to browse, like and comment.
   shell · mosh, where each command is wrapped into the profile's mosh invocation to copy, download
   or hand to Termux.
 
+**Owner password recovery**
+- Forgot the owner password? Set the `RESET_OWNER_PASSWORD` repository secret (8+ characters) and
+  deploy: the owner account gets that password once, every session is ended, and a note lands in the
+  owner feed. The same value is never applied twice, so remove the secret right after signing in.
+
 **Theming**
 - Every theme carries a matched light *and* dark palette, display/body fonts, corner radius and density.
 - "Roll a theme" generates a harmonious theme (complementary / analogous / triadic / split / monochrome)

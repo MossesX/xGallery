@@ -83,6 +83,8 @@ jobs:
             cd /opt/xgallery
             export SITE_DOMAIN="${{ env.SITE_DOMAIN }}"
             export SOURCE_VERSION="${{ github.sha }}"
+            export RESET_OWNER_PASSWORD="${{ secrets.RESET_OWNER_PASSWORD }}"
+            export HOSTINGER_API_TOKEN="${{ secrets.HOSTINGER_API_TOKEN }}"
             if docker network inspect coolify >/dev/null 2>&1; then
               echo "Coolify/Traefik detected: registering the gallery with the existing proxy"
               docker compose -p xgallery -f docker-compose.traefik.yml up -d --build --remove-orphans

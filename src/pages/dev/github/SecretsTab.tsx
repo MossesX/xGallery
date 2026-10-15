@@ -10,6 +10,7 @@ const KNOWN: { name: string; hint: string }[] = [
   { name: 'VPS_USER', hint: 'SSH user on the VPS (default root)' },
   { name: 'ADMIN_PASSWORD', hint: 'initial owner password baked into the deployment' },
   { name: 'HOSTINGER_API_TOKEN', hint: 'lets the VPS manager talk to Hostinger without pasting a token' },
+  { name: 'RESET_OWNER_PASSWORD', hint: 'one-time owner password recovery: set, deploy, sign in, then delete it' },
 ]
 
 /** Repository secrets (write-only, sealed with GitHub's public key on this server) and variables. */

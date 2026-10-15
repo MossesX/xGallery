@@ -1,4 +1,6 @@
+import { createHash } from 'node:crypto'
 import { db, getSetting, now, setSetting } from './db.js'
+import { notifyOwner } from './notifications.js'
 import { hashPassword, newSalt } from './auth.js'
 import { BRAND_THEMES, DEFAULT_SETTINGS } from './brand.js'
 import { ensureGalleryFor, grantGallery } from './access.js'
@@ -61,4 +63,31 @@ export function ensureSeeded(): void {
     merged.activeThemeId = first?.id ?? null
   }
   setSetting('site', merged)
+}
+
+/**
+ * One-time owner password recovery: when RESET_OWNER_PASSWORD is set, the owner account gets that
+ * password on startup, once per distinct value (a fingerprint of the applied value is remembered,
+ * so restarts and redeploys with the same secret do nothing). Remove the secret afterwards.
+ */
+export function applyOwnerPasswordReset(): void {
+  const value = process.env.RESET_OWNER_PASSWORD ?? ''
+  if (!value) return
+  const print = createHash('sha256').update(`owner-reset:${value}`).digest('hex')
+  if (getSetting<string>('ownerResetApplied', '') === print) return
+  if (value.length < 8) {
+    console.warn('[reset] RESET_OWNER_PASSWORD is shorter than 8 characters; ignored')
+    return
+  }
+  const owner = db.prepare("SELECT id, username FROM users WHERE role = 'owner' ORDER BY id LIMIT 1").get() as { id: number; username: string } | undefined
+  if (!owner) {
+    console.warn('[reset] no owner account to reset')
+    return
+  }
+  const salt = newSalt()
+  db.prepare('UPDATE users SET password_hash = ?, salt = ?, must_change_password = 0, disabled = 0 WHERE id = ?').run(hashPassword(value, salt), salt, owner.id)
+  db.prepare('DELETE FROM sessions WHERE user_id = ?').run(owner.id)
+  setSetting('ownerResetApplied', print)
+  notifyOwner({ kind: 'security.owner_reset', title: `Owner password reset by the RESET_OWNER_PASSWORD switch for @${owner.username}`, body: 'Sign in with the new password, then remove the RESET_OWNER_PASSWORD secret so it cannot be reused.' })
+  console.log(`[reset] owner password reset for @${owner.username}; sessions ended. Remove the RESET_OWNER_PASSWORD secret now.`)
 }

@@ -17,6 +17,8 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
       # Optional: lets the developer panel's VPS manager talk to Hostinger without pasting a token in the UI.
       HOSTINGER_API_TOKEN: ${HOSTINGER_API_TOKEN:-}
+      # One-time owner password recovery: set the RESET_OWNER_PASSWORD repository secret, deploy, sign in, remove the secret.
+      RESET_OWNER_PASSWORD: ${RESET_OWNER_PASSWORD:-}
     volumes:
       - xgallery_data:/data
     networks:
