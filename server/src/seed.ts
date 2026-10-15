@@ -78,7 +78,11 @@ export function applyOwnerPasswordReset(): void {
     return
   }
   const print = createHash('sha256').update(`owner-reset:${value}`).digest('hex')
-  if (getSetting<string>('ownerResetApplied', '') === print) {
+  // Every value ever applied is remembered, so a deploy that still carries the secret never undoes a
+  // later reset (a manual-run password, the sign-in page recovery) by re-applying the older value.
+  const appliedRaw = getSetting<string | string[]>('ownerResetApplied', [])
+  const applied = Array.isArray(appliedRaw) ? appliedRaw : appliedRaw ? [appliedRaw] : []
+  if (applied.includes(print)) {
     const who = db.prepare("SELECT username FROM users WHERE role = 'owner' ORDER BY id LIMIT 1").get() as { username: string } | undefined
     console.log(`[reset] RESET_OWNER_PASSWORD (${value.length} characters) was already applied to @${who?.username ?? '?'} earlier; sign in with that exact value, or set a new value to reset again`)
     return
@@ -97,7 +101,7 @@ export function applyOwnerPasswordReset(): void {
   const forceChange = process.env.RESET_OWNER_FORCE_CHANGE === '1' ? 1 : 0
   db.prepare('UPDATE users SET password_hash = ?, salt = ?, must_change_password = ?, disabled = 0 WHERE id = ?').run(hashPassword(value, salt), salt, forceChange, owner.id)
   db.prepare('DELETE FROM sessions WHERE user_id = ?').run(owner.id)
-  setSetting('ownerResetApplied', print)
+  setSetting('ownerResetApplied', [...applied, print].slice(-50))
   notifyOwner({ kind: 'security.owner_reset', title: `Owner password reset by the RESET_OWNER_PASSWORD switch for @${owner.username}`, body: 'Sign in with the new password, then remove the RESET_OWNER_PASSWORD secret so it cannot be reused.' })
   console.log(`[reset] owner password reset for @${owner.username} (${value.length} characters${forceChange ? ', must be changed at sign-in' : ''}); sessions ended. Remove the RESET_OWNER_PASSWORD secret now.`)
 }
