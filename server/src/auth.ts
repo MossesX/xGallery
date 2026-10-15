@@ -1,6 +1,7 @@
 import { pbkdf2Sync, randomBytes, timingSafeEqual } from 'node:crypto'
 import type { Request, Response, NextFunction } from 'express'
-import { db, now } from './db.js'
+import { db, liveDb, now, sandboxStore } from './db.js'
+import { openSandbox, resetSandbox } from './sandbox.js'
 import { PERM_LABELS, getPolicy, resolveEffective, type Limits, type Perms } from './policy.js'
 export type { Perms, Limits } from './policy.js'
 
@@ -8,7 +9,7 @@ export interface User {
   id: number
   username: string
   display_name: string
-  role: 'owner' | 'admin' | 'user'
+  role: 'owner' | 'admin' | 'user' | 'temp_owner'
   disabled: number
   status: 'active' | 'pending'
   created_by: number | null
@@ -57,7 +58,7 @@ export function publicUser(row: Record<string, unknown>): User {
     id: row.id as number,
     username: row.username as string,
     display_name: row.display_name as string,
-    role: row.role as 'owner' | 'admin' | 'user',
+    role: row.role as 'owner' | 'admin' | 'user' | 'temp_owner',
     disabled: row.disabled as number,
     status: ((row.status as string) === 'pending' ? 'pending' : 'active'),
     created_by: (row.created_by as number | null) ?? null,
@@ -142,22 +143,43 @@ declare module 'express-serve-static-core' {
   interface Request {
     user?: User
     sessionToken?: string
+    /** Set when the request runs inside a temporary owner's sandbox copy of the site. */
+    sandbox?: { userId: number }
   }
 }
 
-/** Attaches req.user when a valid session cookie is present. Never rejects. */
+/**
+ * Attaches req.user when a valid session cookie is present. Never rejects. A temporary owner is
+ * switched into their sandbox here: the rest of the request runs against their private copy, in
+ * which their account is the owner.
+ */
 export function attachUser(req: Request, _res: Response, next: NextFunction): void {
   const token = parseCookies(req.headers.cookie)[COOKIE]
   if (!token) return next()
-  const row = db
+  const row = liveDb
     .prepare('SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ? AND s.expires_at > ? AND u.disabled = 0')
     .get(token, now()) as Record<string, unknown> | undefined
-  if (row) {
+  if (!row) return next()
+  liveDb.prepare('UPDATE users SET last_seen_at = ? WHERE id = ?').run(now(), row.id as number)
+  req.sessionToken = token
+  if (row.role !== 'temp_owner') {
     req.user = publicUser(row)
-    req.sessionToken = token
-    db.prepare('UPDATE users SET last_seen_at = ? WHERE id = ?').run(now(), req.user.id)
+    return next()
   }
-  next()
+  const userId = row.id as number
+  let ctx = openSandbox(userId)
+  let srow = ctx.db.prepare('SELECT * FROM users WHERE id = ?').get(userId) as Record<string, unknown> | undefined
+  if (!srow || srow.role !== 'owner') {
+    // The copy predates the account or was tampered with: start again from the live site.
+    resetSandbox(userId)
+    ctx = openSandbox(userId)
+    srow = ctx.db.prepare('SELECT * FROM users WHERE id = ?').get(userId) as Record<string, unknown>
+  }
+  req.sandbox = { userId }
+  sandboxStore.run(ctx, () => {
+    req.user = publicUser(srow!)
+    next()
+  })
 }
 
 /** Gate a route on one of the owner-controlled capabilities. */

@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Copy, KeyRound, Plus, Search, SlidersHorizontal, Sparkles, Trash2, UserX, UserCheck } from 'lucide-react'
 import { MemberDrawer } from '../../components/MemberDrawer'
 import { api } from '../../api/client'
-import { keys, useGalleries, useMe, useUsers } from '../../api/hooks'
+import { keys, useGalleries, useMe, useUsers, useSession } from '../../api/hooks'
 import type { Role, User } from '../../api/types'
 import { Modal } from '../../components/Modal'
 import { Avatar } from '../../components/Avatar'
@@ -25,6 +25,7 @@ export function UsersPage() {
   const { data: allGalleries } = useQuery({ queryKey: ['admin-galleries'], queryFn: () => api.get<{ galleries: GalleryRef[] }>('/api/users/galleries').then((r) => r.galleries), enabled: owner })
   const qc = useQueryClient()
   const notify = useUI((s) => s.notify)
+  const { data: session } = useSession()
   const [createOpen, setCreateOpen] = useState(false)
   const [resetFor, setResetFor] = useState<User | null>(null)
   const [accessFor, setAccessFor] = useState<User | null>(null)
@@ -133,6 +134,7 @@ export function UsersPage() {
               <option value="owner">Owner</option>
               <option value="admin">Administrators</option>
               <option value="user">Members</option>
+              <option value="temp_owner">Temporary owners</option>
             </select>
             <select className="select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)} style={{ width: 'auto' }} aria-label="Status filter">
               <option value="all">Any status</option>
@@ -221,13 +223,21 @@ export function UsersPage() {
                 </td>
                 <td>
                   {owner ? (
+                    <>
                     <select className="select" value={u.role} disabled={u.id === me?.id} onChange={(e) => update.mutate({ id: u.id, patch: { role: e.target.value } })} style={{ width: 'auto', padding: '4px 8px' }}>
                       <option value="user">Member</option>
                       <option value="admin">Admin (own gallery)</option>
+                      <option value="temp_owner">Temporary owner (sandbox)</option>
                       <option value="owner">Owner</option>
                     </select>
+                    {u.role === 'temp_owner' && me?.role === 'owner' && !session?.sandbox && (
+                      <button className="btn ghost sm" style={{ marginLeft: 4 }} title="Throw their sandbox away; their next visit starts from the live site" onClick={() => window.confirm(`Reset ${u.display_name}'s sandbox to the live site?`) && api.post(`/api/users/${u.id}/sandbox/reset`, {}).then(() => notify('Sandbox reset', 'success'), (e: Error) => notify(e.message, 'error'))} data-sandbox-reset-user={u.id}>
+                        Reset sandbox
+                      </button>
+                    )}
+                    </>
                   ) : (
-                    <span className="badge">{u.role === 'user' ? 'Member' : u.role}</span>
+                    <span className="badge">{u.role === 'user' ? 'Member' : u.role === 'temp_owner' ? 'Temporary owner' : u.role}</span>
                   )}
                 </td>
                 {owner && (
@@ -307,6 +317,7 @@ export function UsersPage() {
                 <select className="select" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as Role })}>
                   <option value="user">Member (browse, like, comment)</option>
                   <option value="admin">Admin (gets their own gallery)</option>
+                  <option value="temp_owner">Temporary owner (full control in a private sandbox; the live site never changes)</option>
                 </select>
               </div>
               <div className="field">

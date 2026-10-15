@@ -1,8 +1,8 @@
 import { Router } from 'express'
-import { createWriteStream, existsSync, mkdirSync, unlinkSync } from 'node:fs'
+import { createWriteStream, existsSync, mkdirSync } from 'node:fs'
 import path from 'node:path'
 import { pipeline } from 'node:stream/promises'
-import { db, MEDIA_DIR, now } from '../db.js'
+import { db, MEDIA_DIR, mediaRel, now, removeMedia } from '../db.js'
 import { avatarUrlFor, publicUser, requirePerm, requireUser } from '../auth.js'
 import { HttpError, str, wrap, IdRow } from '../util.js'
 import { areBuddies, galleryOf } from '../access.js'
@@ -58,7 +58,7 @@ socialRouter.post(
     const ext: Record<string, string> = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif' }
     if (!ext[mime]) throw new HttpError(415, 'Use a JPEG, PNG, WebP or GIF picture')
     if (Number(req.headers['content-length'] ?? 0) > MAX_AVATAR) throw new HttpError(413, 'Picture must be under 6 MB')
-    const rel = path.posix.join('avatars', `${req.user!.id}-${now()}${ext[mime]}`)
+    const rel = mediaRel(path.posix.join('avatars', `${req.user!.id}-${now()}${ext[mime]}`))
     const abs = path.join(MEDIA_DIR, rel)
     mkdirSync(path.dirname(abs), { recursive: true })
     let received = 0
@@ -70,13 +70,7 @@ socialRouter.post(
     const old = db.prepare('SELECT avatar_path FROM users WHERE id = ?').get(req.user!.id) as { avatar_path: string | null }
     db.prepare('UPDATE users SET avatar_path = ? WHERE id = ?').run(rel, req.user!.id)
     track(req, 'profile.avatar', { detail: { size: received } })
-    if (old.avatar_path && existsSync(path.join(MEDIA_DIR, old.avatar_path))) {
-      try {
-        unlinkSync(path.join(MEDIA_DIR, old.avatar_path))
-      } catch {
-        /* ignore */
-      }
-    }
+    removeMedia(old.avatar_path)
     res.json({ user: publicUser(db.prepare('SELECT * FROM users WHERE id = ?').get(req.user!.id) as IdRow) })
   }),
 )
@@ -87,13 +81,7 @@ socialRouter.delete(
   wrap((req, res) => {
     const old = db.prepare('SELECT avatar_path FROM users WHERE id = ?').get(req.user!.id) as { avatar_path: string | null }
     db.prepare('UPDATE users SET avatar_path = NULL WHERE id = ?').run(req.user!.id)
-    if (old.avatar_path && existsSync(path.join(MEDIA_DIR, old.avatar_path))) {
-      try {
-        unlinkSync(path.join(MEDIA_DIR, old.avatar_path))
-      } catch {
-        /* ignore */
-      }
-    }
+    removeMedia(old.avatar_path)
     res.json({ user: publicUser(db.prepare('SELECT * FROM users WHERE id = ?').get(req.user!.id) as IdRow) })
   }),
 )

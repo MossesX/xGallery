@@ -89,6 +89,11 @@ app.use('/api/activity', activityRouter)
 app.use('/api/policy', policyRouter)
 app.use('/api/notifications', notificationsRouter)
 app.use('/api/admin', adminRouter)
+// A temporary owner's sandbox never reaches the developer tooling: it acts on the real server, code and services.
+app.use('/api/dev', (req, res, next) => {
+  if (req.sandbox) return res.status(403).json({ error: 'The developer panel is not available to a temporary owner: it changes the real server, source code and services', code: 'sandbox' })
+  next()
+})
 app.use('/api/dev/tasks', tasksRouter)
 app.use('/api/dev/vps', vpsRouter)
 app.use('/api/dev/github', githubRouter)

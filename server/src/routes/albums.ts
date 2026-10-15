@@ -4,7 +4,7 @@ import { randomBytes } from 'node:crypto'
 import { db, now } from '../db.js'
 import { hashPassword, requirePerm, requireUser, verifyPassword } from '../auth.js'
 import { hasPinAccess, issuePin, PIN_RE, pinAttemptAllowed, pinAttemptFailed, pinAttemptReset } from '../pin.js'
-import { mkdirSync, unlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { canManageGallery, canViewAlbum, galleryOf, isOwner, managedGalleryIds, visibleAlbumRows } from '../access.js'
 import { HttpError, bool, num, slugify, str, wrap, IdRow } from '../util.js'
 import { albumJson, commentJson, mediaJson } from '../serialize.js'
@@ -14,7 +14,7 @@ import { notify, notifyOwner } from '../notifications.js'
 import { writeZip } from '../zip.js'
 import path from 'node:path'
 import { existsSync } from 'node:fs'
-import { MEDIA_DIR } from '../db.js'
+import { MEDIA_DIR, mediaRel, removeMedia } from '../db.js'
 import { galleryById } from '../access.js'
 import { getPolicy } from '../policy.js'
 
@@ -401,18 +401,12 @@ albumsRouter.post(
     const body = req.body as Buffer
     if (!Buffer.isBuffer(body) || body.length < 100) throw new HttpError(400, 'Send the snapshot image as the request body')
     const ext = req.headers['content-type'] === 'image/png' ? '.png' : req.headers['content-type'] === 'image/webp' ? '.webp' : '.jpg'
-    const rel = path.posix.join(SNAP_DIR, `${row.id}-${now()}${ext}`)
-    mkdirSync(path.join(MEDIA_DIR, SNAP_DIR), { recursive: true })
+    const rel = mediaRel(path.posix.join(SNAP_DIR, `${row.id}-${now()}${ext}`))
+    mkdirSync(path.dirname(path.join(MEDIA_DIR, rel)), { recursive: true })
     writeFileSync(path.join(MEDIA_DIR, rel), body)
     const old = row.lock_snapshot as string | null
     db.prepare('UPDATE albums SET lock_snapshot = ? WHERE id = ?').run(rel, row.id)
-    if (old && existsSync(path.join(MEDIA_DIR, old))) {
-      try {
-        unlinkSync(path.join(MEDIA_DIR, old))
-      } catch {
-        /* ignore */
-      }
-    }
+    removeMedia(old)
     res.json({ album: albumJson(db.prepare('SELECT * FROM albums WHERE id = ?').get(row.id) as IdRow, req.user!.id) })
   }),
 )

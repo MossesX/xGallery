@@ -3,10 +3,10 @@ import { db, now } from '../db.js'
 import { requireUser } from '../auth.js'
 import { HttpError, num, parseJson, slugify, str, wrap, IdRow } from '../util.js'
 import { accessibleGalleryIds, canBrowseAlbum, canManageGallery, galleriesOf, galleryById, galleryOf, grantedGalleryIds, uniqueGallerySlugFor, type GalleryRow } from '../access.js'
-import { createWriteStream, existsSync, mkdirSync, unlinkSync } from 'node:fs'
+import { createWriteStream, existsSync, mkdirSync } from 'node:fs'
 import path from 'node:path'
 import { pipeline } from 'node:stream/promises'
-import { MEDIA_DIR } from '../db.js'
+import { MEDIA_DIR, mediaRel, removeMedia } from '../db.js'
 import { track } from '../activity.js'
 import { albumJson, galleryJson, mediaJson } from '../serialize.js'
 
@@ -75,11 +75,7 @@ galleriesRouter.put(
     let theme = g.theme_id
     if ('themeId' in b) theme = b.themeId == null ? null : num(b.themeId)
     if (b.clearCover === true && g.cover_path) {
-      try {
-        unlinkSync(path.join(MEDIA_DIR, g.cover_path))
-      } catch {
-        /* ignore */
-      }
+      removeMedia(g.cover_path)
       db.prepare('UPDATE galleries SET cover_path = NULL WHERE id = ?').run(g.id)
     }
     let pub = g.public_album_id
@@ -132,7 +128,7 @@ galleriesRouter.post(
     const ext: Record<string, string> = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif' }
     if (!ext[mime]) throw new HttpError(415, 'Use a JPEG, PNG, WebP or GIF image')
     if (Number(req.headers['content-length'] ?? 0) > MAX_COVER) throw new HttpError(413, 'Image must be under 8 MB')
-    const rel = path.posix.join('covers', `${g.id}-${now()}${ext[mime]}`)
+    const rel = mediaRel(path.posix.join('covers', `${g.id}-${now()}${ext[mime]}`))
     const abs = path.join(MEDIA_DIR, rel)
     mkdirSync(path.dirname(abs), { recursive: true })
     let received = 0
@@ -141,13 +137,7 @@ galleriesRouter.post(
       if (received > MAX_COVER) req.destroy(new HttpError(413, 'Image must be under 8 MB'))
     })
     await pipeline(req, createWriteStream(abs))
-    if (g.cover_path && existsSync(path.join(MEDIA_DIR, g.cover_path))) {
-      try {
-        unlinkSync(path.join(MEDIA_DIR, g.cover_path))
-      } catch {
-        /* ignore */
-      }
-    }
+    removeMedia(g.cover_path)
     db.prepare('UPDATE galleries SET cover_path = ?, updated_at = ? WHERE id = ?').run(rel, now(), g.id)
     track(req, 'gallery.cover', { targetType: 'gallery', targetId: g.id, targetLabel: g.title })
     res.json({ gallery: galleryJson(galleryById(g.id)!, req.user!.id) })

@@ -1,14 +1,58 @@
 import { DatabaseSync } from 'node:sqlite'
-import { mkdirSync } from 'node:fs'
+import { AsyncLocalStorage } from 'node:async_hooks'
+import { existsSync, mkdirSync, unlinkSync } from 'node:fs'
 import path from 'node:path'
 
 export const DATA_DIR = process.env.DATA_DIR ?? path.resolve(process.cwd(), 'data')
 export const MEDIA_DIR = path.join(DATA_DIR, 'media')
 mkdirSync(MEDIA_DIR, { recursive: true })
 
-export const db = new DatabaseSync(path.join(DATA_DIR, 'gallery.db'))
-db.exec('PRAGMA journal_mode = WAL')
-db.exec('PRAGMA foreign_keys = ON')
+/** The site's database. */
+export const liveDb = new DatabaseSync(path.join(DATA_DIR, 'gallery.db'))
+liveDb.exec('PRAGMA journal_mode = WAL')
+liveDb.exec('PRAGMA foreign_keys = ON')
+
+/**
+ * Sandboxes: a "temporary owner" works on a private copy of the database (and a private media
+ * folder). Requests from such an account run inside this store, and `db` below resolves to the copy,
+ * so every route behaves exactly as for the owner while the live site never changes.
+ */
+export interface SandboxContext {
+  userId: number
+  db: DatabaseSync
+  /** Media written in the sandbox lands under this prefix inside MEDIA_DIR. */
+  mediaPrefix: string
+}
+export const sandboxStore = new AsyncLocalStorage<SandboxContext>()
+export const currentSandbox = (): SandboxContext | null => sandboxStore.getStore() ?? null
+const currentDb = (): DatabaseSync => sandboxStore.getStore()?.db ?? liveDb
+/** The database for the current request: the live one, or the sandbox copy of a temporary owner. */
+export const db: DatabaseSync = new Proxy(liveDb, {
+  get(_target, prop) {
+    const d = currentDb()
+    const v = Reflect.get(d, prop) as unknown
+    return typeof v === 'function' ? (v as (...a: unknown[]) => unknown).bind(d) : v
+  },
+}) as DatabaseSync
+
+/** Where a new media file is stored (relative to MEDIA_DIR): inside the sandbox folder when one is active. */
+export function mediaRel(rel: string): string {
+  const s = sandboxStore.getStore()
+  return s ? path.posix.join(s.mediaPrefix, rel) : rel
+}
+/** Delete a media file; inside a sandbox only the sandbox's own files are ever removed. */
+export function removeMedia(rel: string | null | undefined): void {
+  if (!rel) return
+  const s = sandboxStore.getStore()
+  if (s && !rel.startsWith(`${s.mediaPrefix}/`)) return
+  const abs = path.join(MEDIA_DIR, rel)
+  if (!existsSync(abs)) return
+  try {
+    unlinkSync(abs)
+  } catch {
+    /* ignore */
+  }
+}
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS users (

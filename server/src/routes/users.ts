@@ -7,6 +7,7 @@ import { galleriesOf } from '../access.js'
 import { HttpError, num, str, wrap, IdRow } from '../util.js'
 import { ensureGalleryFor, galleryOf, grantGallery, isOwner, managedGalleryIds } from '../access.js'
 import { track } from '../activity.js'
+import { resetSandbox, sandboxInfo } from '../sandbox.js'
 
 export const usersRouter = Router()
 usersRouter.use(requireAdmin)
@@ -81,7 +82,7 @@ usersRouter.post(
     const username = str(req.body?.username, 32).toLowerCase()
     const password = typeof req.body?.password === 'string' ? req.body.password : ''
     const displayName = str(req.body?.displayName, 80) || username
-    const role = isOwner(req.user) && req.body?.role === 'admin' ? 'admin' : 'user'
+    const role = isOwner(req.user) && (req.body?.role === 'admin' || (req.body?.role === 'temp_owner' && !req.sandbox)) ? (req.body.role as string) : 'user'
     if (!/^[a-z0-9_.-]{3,32}$/.test(username)) throw new HttpError(400, 'Username must be 3-32 characters: letters, numbers, dot, dash or underscore')
     if (password.length < 8) throw new HttpError(400, 'Password must be at least 8 characters')
     if (db.prepare('SELECT 1 FROM users WHERE username = ?').get(username)) throw new HttpError(409, 'That username is already taken')
@@ -150,10 +151,13 @@ usersRouter.put(
     }
     const b = req.body ?? {}
     let role = row.role as string
-    if (owner && (b.role === 'admin' || b.role === 'user' || b.role === 'owner')) {
+    if (owner && (b.role === 'admin' || b.role === 'user' || b.role === 'owner' || b.role === 'temp_owner')) {
       if (self && b.role !== 'owner') throw new HttpError(400, 'You cannot demote your own account')
+      if (req.sandbox && b.role === 'temp_owner') throw new HttpError(400, 'Temporary owners are appointed by the real owner')
       role = b.role
     }
+    // Leaving the temporary-owner role throws the sandbox away.
+    if (row.role === 'temp_owner' && role !== 'temp_owner' && !req.sandbox) resetSandbox(id)
     const disabled: number = typeof b.disabled === 'boolean' ? (b.disabled ? 1 : 0) : (row.disabled as number)
     if (self && disabled) throw new HttpError(400, 'You cannot disable your own account')
     const displayName = str(b.displayName, 80) || (row.display_name as string)
@@ -334,8 +338,32 @@ usersRouter.delete(
     if (!isOwner(req.user) && (row.created_by !== req.user!.id || row.role !== 'user')) throw new HttpError(403, 'You can only delete members you created')
     if (row.role === 'owner') throw new HttpError(400, 'The owner account cannot be deleted')
     track(req, 'admin.user_delete', { userId: id, targetType: 'user', targetId: id, targetLabel: String(row.username) })
+    if (row.role === 'temp_owner' && !req.sandbox) resetSandbox(id)
     db.prepare('DELETE FROM users WHERE id = ?').run(id)
     res.json({ ok: true })
   }),
 )
 
+
+/** The real owner throws a temporary owner's sandbox away: their next request starts from the live site again. */
+usersRouter.post(
+  '/:id/sandbox/reset',
+  requireOwner,
+  wrap((req, res) => {
+    if (req.sandbox) throw new HttpError(403, 'Only the real owner resets other sandboxes')
+    const id = Number(req.params.id)
+    const row = db.prepare('SELECT id, username, role FROM users WHERE id = ?').get(id) as IdRow | undefined
+    if (!row || row.role !== 'temp_owner') throw new HttpError(404, 'No temporary owner with that id')
+    resetSandbox(id)
+    track(req, 'admin.sandbox_reset', { targetType: 'user', targetId: id, targetLabel: String(row.username) })
+    res.json({ ok: true })
+  }),
+)
+usersRouter.get(
+  '/:id/sandbox',
+  requireOwner,
+  wrap((req, res) => {
+    const id = Number(req.params.id)
+    res.json({ sandbox: req.sandbox ? null : sandboxInfo(id) })
+  }),
+)

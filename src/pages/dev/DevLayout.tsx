@@ -30,7 +30,7 @@ function OfflineBar() {
   )
 }
 import { api } from '../../api/client'
-import { useMe } from '../../api/hooks'
+import { useMe, useSession } from '../../api/hooks'
 import { devKeys, useDevStatus } from '../../api/dev'
 import { PageLoader } from '../../components/Skeleton'
 import { useUI } from '../../store/ui'
@@ -242,7 +242,8 @@ function Item({ item }: { item: NavItem }) {
 /** Owner-only developer panel: every page behind it needs the developer password once per login session. */
 export function DevLayout() {
   const { data: me, isLoading } = useMe()
-  const { data: status, isLoading: statusLoading } = useDevStatus(me?.role === 'owner')
+  const { data: session } = useSession(!!me)
+  const { data: status, isLoading: statusLoading } = useDevStatus(me?.role === 'owner' && !session?.sandbox)
   const qc = useQueryClient()
   const notify = useUI((s) => s.notify)
   const designMode = useUI((s) => s.designMode)
@@ -271,6 +272,19 @@ export function DevLayout() {
   if (isLoading || (me?.role === 'owner' && statusLoading)) return <PageLoader />
   if (!me) return <Navigate to="/login" replace state={{ from: location.pathname }} />
   if (me.role !== 'owner') return <Navigate to="/admin" replace />
+  if (session?.sandbox)
+    return (
+      <main className="page narrow">
+        <div className="login-card request-card dev-gate stack" style={{ gap: 10 }} data-dev-sandbox="">
+          <div className="eyebrow">
+            <ShieldAlert size={11} /> Developer panel
+          </div>
+          <h1 style={{ margin: 0 }}>Not available in a sandbox</h1>
+          <p className="muted" style={{ margin: 0 }}>The developer panel changes the real server, source code, VPS and GitHub, so a temporary owner cannot open it. Everything else in the owner console is yours to try.</p>
+          <Link to="/admin" className="btn primary">Back to the owner console</Link>
+        </div>
+      </main>
+    )
   if (!status) return <PageLoader />
   if (!status.passwordSet) return <SetPasswordScreen />
   if (!status.unlocked) return <UnlockScreen />

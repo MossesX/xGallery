@@ -72,6 +72,16 @@ site. Members sign in to browse, like and comment.
   on phones the whole panel menu becomes one "Go to…" combo. The site banner folds its navigation and
   toolbar into a sectioned menu (Go to / Tools / Account) on narrow screens.
 
+**Temporary owner (sandbox)**
+- A member can be given the *Temporary owner* role (Owner console → Members). They get the full
+  owner console and every owner power, but inside a private copy of the site: the first request
+  copies the database (their account becomes the owner in the copy, server secrets are stripped),
+  uploads go to their own media folder, and nothing they do reaches the live site or other people.
+  Deleting live content inside the sandbox never touches live files. The developer panel (real
+  server, code, VPS, GitHub) is refused. Passwords are account-level and do apply for real.
+- A purple bar reminds them they are in a sandbox, with "Reset to the live site"; the real owner can
+  reset or demote them from the Members page, which throws the copy away.
+
 **Owner password recovery**
 - On the sign-in page, type `password` as the username and `reset` as the password: a dialog asks
   for a recovery key and a new owner password, then signs you in. A key is one of the single-use

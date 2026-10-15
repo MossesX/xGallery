@@ -1,4 +1,4 @@
-export type Role = 'owner' | 'admin' | 'user'
+export type Role = 'owner' | 'admin' | 'user' | 'temp_owner'
 
 export interface User {
   id: number
@@ -161,6 +161,8 @@ export interface TimelineItem extends MediaItem {
 export interface Session {
   user: User | null
   viewingAs: { owner: { id: number; displayName: string } } | null
+  /** Set for a temporary owner: the whole site they see is their private sandbox copy. */
+  sandbox: { createdAt: number } | null
 }
 
 export interface Palette {

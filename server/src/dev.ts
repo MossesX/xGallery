@@ -121,6 +121,10 @@ export function requireDev(req: Request, res: Response, next: NextFunction): voi
     res.status(401).json({ error: 'Sign in required' })
     return
   }
+  if (req.sandbox) {
+    res.status(403).json({ error: 'The developer panel is not available to a temporary owner: it changes the real server, source code and services', code: 'sandbox' })
+    return
+  }
   if (req.user.role !== 'owner') {
     res.status(403).json({ error: 'The developer panel is for the site owner' })
     return

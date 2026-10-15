@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { Bell, Eye, Images, LogIn, LogOut, Menu as MenuIcon, Search, Settings2, Sparkles, UserPlus, X } from 'lucide-react'
+import { Bell, Eye, FlaskConical, Images, LogIn, LogOut, Menu as MenuIcon, Search, Settings2, Sparkles, UserPlus, X } from 'lucide-react'
 import { useAiStatus, useLogout, useMe, useNotifUnread, useSession, useSettings, useUnread } from '../api/hooks'
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
@@ -93,6 +93,14 @@ export function Banner() {
 
   return (
     <header className={`banner ${ui.banner.dense ? 'dense' : ''}`}>
+      {session?.sandbox && user && (
+        <div className="viewing-bar sandbox-bar" data-sandbox-bar="">
+          <FlaskConical size={13} /> <strong>Sandbox</strong> · you have full owner control here, but only you see what you change; the live site stays as it is{session.sandbox.createdAt ? ` (copy taken ${new Date(session.sandbox.createdAt).toLocaleString()})` : ''}.
+          <button className="btn sm" onClick={() => { if (window.confirm('Throw away everything you changed in this sandbox and start again from the live site?')) api.post('/api/auth/sandbox/reset', {}).then(() => { qc.clear(); window.location.assign('/') }) }} data-sandbox-reset="">
+            Reset to the live site
+          </button>
+        </div>
+      )}
       {session?.viewingAs && user && (
         <div className="viewing-bar">
           <Eye size={13} /> Viewing as <strong>{user.display_name}</strong> (@{user.username}) · what they see is what you see

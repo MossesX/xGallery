@@ -1,10 +1,10 @@
 import { Router } from 'express'
-import { createWriteStream, existsSync, unlinkSync, mkdirSync } from 'node:fs'
+import { createWriteStream, existsSync, mkdirSync } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import path from 'node:path'
 import { randomBytes } from 'node:crypto'
 import { pipeline } from 'node:stream/promises'
-import { db, MEDIA_DIR, now } from '../db.js'
+import { db, MEDIA_DIR, mediaRel, now, removeMedia } from '../db.js'
 import { requirePerm, requireUser, type User } from '../auth.js'
 import { HttpError, num, parseJson, str, wrap, IdRow } from '../util.js'
 import { commentJson, mediaJson } from '../serialize.js'
@@ -20,18 +20,7 @@ export const mediaRouter = Router()
 const MAX_UPLOAD = Number(process.env.MAX_UPLOAD_BYTES ?? 2 * 1024 * 1024 * 1024)
 
 export function removeMediaFiles(row: Record<string, unknown>): void {
-  for (const p of [row.file_path, row.thumb_path]) {
-    if (typeof p === 'string' && p) {
-      const abs = path.join(MEDIA_DIR, p)
-      if (existsSync(abs)) {
-        try {
-          unlinkSync(abs)
-        } catch {
-          /* ignore */
-        }
-      }
-    }
-  }
+  for (const p of [row.file_path, row.thumb_path]) if (typeof p === 'string' && p) removeMedia(p)
 }
 
 function extFor(mime: string, name: string): string {
@@ -159,7 +148,7 @@ mediaRouter.post(
     const perAlbum = req.user!.limits.maxMediaPerAlbum
     if (perAlbum > 0 && (db.prepare('SELECT COUNT(*) c FROM media WHERE album_id = ?').get(albumId) as { c: number }).c >= perAlbum) throw new HttpError(403, `Albums may hold ${perAlbum} items for your account`)
     const name = str(meta.fileName, 200) || 'upload'
-    const rel = path.join(String(albumId), `${now()}-${randomBytes(4).toString('hex')}${extFor(mime, name)}`)
+    const rel = mediaRel(path.posix.join(String(albumId), `${now()}-${randomBytes(4).toString('hex')}${extFor(mime, name)}`))
     const size = await streamToFile(req, rel)
     const last = db.prepare('SELECT MAX(sort_order) m FROM media WHERE album_id = ?').get(albumId) as { m: number | null }
     const info = db

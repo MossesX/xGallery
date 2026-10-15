@@ -1989,3 +1989,4 @@ button.link { background: none; border: 0; padding: 0; color: var(--c-primary); 
 .setup-line.warn { color: var(--c-warning, #d97706); }
 .setup-line.error { color: #dc2626; }
 .setup-out { margin: 0 0 0 10px; padding: 6px 8px; border-radius: 6px; background: var(--c-bg); border: 1px solid var(--c-border); font-size: 0.76rem; white-space: pre-wrap; word-break: break-word; max-height: 200px; overflow: auto; }
+.sandbox-bar { background: #7c3aed; color: #fff; flex-wrap: wrap; }

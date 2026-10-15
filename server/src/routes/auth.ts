@@ -1,12 +1,13 @@
 import { Router } from 'express'
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
-import { db, getSetting, now, setSetting } from '../db.js'
+import { db, getSetting, liveDb, now, setSetting } from '../db.js'
 import { attemptsFor, createSession, destroySession, hashPassword, loginFailed, loginSucceeded, loginThrottle, newSalt, publicUser, requireOwner, requireUser, returningOwner, setSessionCookie, verifyPassword } from '../auth.js'
 import { HttpError, str, wrap, IdRow } from '../util.js'
 import { track, logActivity } from '../activity.js'
 import { notifyOwner } from '../notifications.js'
 import { getPolicy } from '../policy.js'
 import { endSessionsForLogin } from '../dev.js'
+import { resetSandbox, sandboxInfo } from '../sandbox.js'
 
 export const authRouter = Router()
 
@@ -58,8 +59,20 @@ authRouter.post(
 
 authRouter.get('/me', (req, res) => {
   const ret = req.user ? returningOwner(req) : null
-  res.json({ user: req.user ?? null, viewingAs: ret && ret.user.id !== req.user!.id ? { owner: { id: ret.user.id, displayName: ret.user.display_name } } : null })
+  res.json({ user: req.user ?? null, viewingAs: ret && ret.user.id !== req.user!.id ? { owner: { id: ret.user.id, displayName: ret.user.display_name } } : null, sandbox: req.sandbox ? (sandboxInfo(req.sandbox.userId) ?? { createdAt: 0 }) : null })
 })
+
+/** A temporary owner starts over: the sandbox copy is discarded and rebuilt from the live site on the next request. */
+authRouter.post(
+  '/sandbox/reset',
+  requireUser,
+  wrap((req, res) => {
+    if (!req.sandbox) throw new HttpError(400, 'This account has no sandbox')
+    logActivity({ userId: req.sandbox.userId, kind: 'sandbox.reset', ip: req.ip ?? '' })
+    resetSandbox(req.sandbox.userId)
+    res.json({ ok: true })
+  }),
+)
 
 /** Owner: leave a "sign in as" session and return to their own account. */
 authRouter.post(
@@ -97,12 +110,15 @@ authRouter.post(
     const minLen = getPolicy().minPasswordLength
     if (next.length < minLen) throw new HttpError(400, `New password must be at least ${minLen} characters`)
     if (next === current) throw new HttpError(400, 'Choose a password you have not used just now')
-    const row = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user!.id) as IdRow
+    // A password belongs to the real account, so a temporary owner's change applies to the live site (and their sandbox copy).
+    const row = liveDb.prepare('SELECT * FROM users WHERE id = ?').get(req.user!.id) as IdRow
     if (!verifyPassword(current, row.salt as string, row.password_hash as string)) throw new HttpError(400, 'Current password is incorrect')
     const salt = newSalt()
-    db.prepare('UPDATE users SET salt = ?, password_hash = ?, must_change_password = 0 WHERE id = ?').run(salt, hashPassword(next, salt), req.user!.id)
+    const hash = hashPassword(next, salt)
+    liveDb.prepare('UPDATE users SET salt = ?, password_hash = ?, must_change_password = 0 WHERE id = ?').run(salt, hash, req.user!.id)
+    if (req.sandbox) db.prepare('UPDATE users SET salt = ?, password_hash = ?, must_change_password = 0 WHERE id = ?').run(salt, hash, req.user!.id)
     // sign other sessions out
-    db.prepare('DELETE FROM sessions WHERE user_id = ? AND token <> ?').run(req.user!.id, req.sessionToken ?? '')
+    liveDb.prepare('DELETE FROM sessions WHERE user_id = ? AND token <> ?').run(req.user!.id, req.sessionToken ?? '')
     track(req, 'profile.password_changed')
     res.json({ ok: true })
   }),
