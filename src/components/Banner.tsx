@@ -69,7 +69,13 @@ export function Banner() {
   const s = data?.settings
   const tb = ui.toolbar
   const [menu, setMenu] = useState(false)
+  const [menuTop, setMenuTop] = useState(64)
   const menuRef = useRef<HTMLDivElement>(null)
+  const toggleMenu = (e: React.MouseEvent<HTMLButtonElement>) => {
+    // The panel is fixed to the viewport (the banner wraps on phones), just under the button that opened it.
+    setMenuTop(Math.round(e.currentTarget.getBoundingClientRect().bottom) + 8)
+    setMenu((m) => !m)
+  }
   useEffect(() => {
     if (!menu) return
     const onDown = (e: MouseEvent) => {
@@ -195,12 +201,12 @@ export function Banner() {
           )}
         </div>
         <div className="banner-menu" ref={menuRef} data-banner-menu={menu ? 'open' : 'closed'}>
-          <button className="btn ghost icon sm banner-menu-btn" onClick={() => setMenu((m) => !m)} aria-label="Menu" aria-expanded={menu} title="Menu" data-banner-menu-btn="">
+          <button className="btn ghost icon sm banner-menu-btn" onClick={toggleMenu} aria-label="Menu" aria-expanded={menu} title="Menu" data-banner-menu-btn="">
             {menu ? <X size={18} /> : <MenuIcon size={18} />}
             {!menu && !!(unread?.messages || notif?.unread || (user?.role === 'owner' && notif?.admin?.total)) && <span className="nav-badge bell-badge" />}
           </button>
           {menu && (
-            <div className="banner-menu-panel" role="menu" data-banner-menu-panel="">
+            <div className="banner-menu-panel" role="menu" style={{ top: menuTop, maxHeight: `calc(100vh - ${menuTop + 12}px)` }} data-banner-menu-panel="">
               {navItems.length > 0 && (
                 <div className="banner-menu-section">
                   <div className="eyebrow">Go to</div>
