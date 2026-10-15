@@ -354,3 +354,37 @@ CREATE TABLE IF NOT EXISTS dev_snapshots (
   payload TEXT NOT NULL
 );
 `)
+
+// v8: the developer task manager — lists (with nested groups), entries (notes, to-dos, tasks, with subtasks).
+db.exec(`
+CREATE TABLE IF NOT EXISTS dev_lists (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  parent_id INTEGER REFERENCES dev_lists(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  color TEXT NOT NULL DEFAULT '',
+  icon TEXT NOT NULL DEFAULT '',
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS dev_lists_parent ON dev_lists(parent_id, sort_order);
+CREATE TABLE IF NOT EXISTS dev_entries (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  list_id INTEGER NOT NULL REFERENCES dev_lists(id) ON DELETE CASCADE,
+  parent_id INTEGER REFERENCES dev_entries(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'open',
+  priority TEXT NOT NULL DEFAULT 'normal',
+  due_at INTEGER,
+  tags TEXT NOT NULL DEFAULT '[]',
+  checklist TEXT NOT NULL DEFAULT '[]',
+  fields TEXT NOT NULL DEFAULT '{}',
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  completed_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS dev_entries_list ON dev_entries(list_id, parent_id, sort_order);
+`)

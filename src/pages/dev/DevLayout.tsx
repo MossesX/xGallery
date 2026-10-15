@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, NavLink, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Braces, Code2, Gauge, History, KeyRound, LayoutTemplate, LifeBuoy, Lock, Menu, MousePointerClick, Palette, PanelBottom, PanelTop, Ruler, ScrollText, Settings2, ShieldAlert, SlidersHorizontal, Sparkles, ToggleLeft, Unlock, Wand2 } from 'lucide-react'
+import { Braces, Code2, Gauge, History, KeyRound, LayoutTemplate, LifeBuoy, ListTodo, Lock, Menu, MousePointerClick, Palette, PanelBottom, PanelTop, Ruler, ScrollText, Settings2, ShieldAlert, SlidersHorizontal, Sparkles, ToggleLeft, Unlock, Wand2 } from 'lucide-react'
 import { api } from '../../api/client'
 import { useMe } from '../../api/hooks'
 import { devKeys, useDevStatus } from '../../api/dev'
@@ -15,6 +15,7 @@ const LINKS = [
   { to: '/dev/code', label: 'Code editor', icon: Code2 },
   { to: '/dev/restore', label: 'Checkpoints & restore', icon: History },
   { to: '/dev/sessions', label: 'Session log', icon: ScrollText },
+  { to: '/dev/tasks', label: 'Task manager', icon: ListTodo },
 ]
 const DESIGN = [
   { to: '/dev/themes', label: 'Themes', icon: Palette },
@@ -67,9 +68,10 @@ export function DevLayout() {
 
   const remaining = status.session ? Math.max(0, Math.round((status.session.lastActiveAt + status.sessionMinutes * 60_000 - Date.now()) / 60_000)) : 0
 
+  const wide = location.pathname.startsWith('/dev/tasks/workspace')
   return (
-    <main className="page dev-page">
-      <div className="admin-layout">
+    <main className={`page dev-page ${wide ? 'dev-wide-page' : ''}`}>
+      <div className={`admin-layout ${wide ? 'dev-wide' : ''}`}>
         <nav className="admin-nav dev-nav">
           <div className="eyebrow" style={{ padding: '0 12px 8px' }}>
             Developer

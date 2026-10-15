@@ -75,7 +75,7 @@ export function ContextMenu() {
     const onCtx = (e: MouseEvent) => {
       const target = e.target as Element | null
       if (!target) return
-      if (target.closest('input, textarea, [contenteditable="true"], .assistant, .dev-textarea')) return
+      if (target.closest('input, textarea, [contenteditable="true"], .assistant, .dev-textarea, .tasks-app')) return
       if (e.shiftKey) return
       e.preventDefault()
       const selection = window.getSelection()?.toString().trim() ?? ''
