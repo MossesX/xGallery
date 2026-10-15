@@ -3,8 +3,8 @@ import Anthropic from '@anthropic-ai/sdk'
 import { db, now } from '../db.js'
 import { requireOwner, requireUser } from '../auth.js'
 import { HttpError, str, wrap, IdRow } from '../util.js'
-import { aiStatus, assistantTurn, getAiSettings, publicAiSettings, saveAiSettings, type PageContext } from '../ai/index.js'
-import { cliAvailable } from '../ai/cli.js'
+import { aiStatus, assistantTurn, getAiSettings, publicAiSettings, recordVerification, saveAiSettings, type PageContext } from '../ai/index.js'
+import { cliAvailable, pingCli } from '../ai/cli.js'
 import { ensureWorkspace, resetWorkspace, sourceVersion, workspaceDiff } from '../ai/workspace.js'
 
 export const aiRouter = Router()
@@ -41,27 +41,34 @@ aiRouter.put(
   }),
 )
 
-/** Check each backend without spending a full turn. */
+/** Verify one or both backends for real: a one-line turn through Claude Code, a model lookup on the API. */
 aiRouter.post(
   '/settings/test',
   requireOwner,
-  wrap(async (_req, res) => {
+  wrap(async (req, res) => {
+    const which = str(req.body?.which, 20) || 'both'
     const s = getAiSettings()
-    const out: { subscription: { ok: boolean; detail: string }; api: { ok: boolean; detail: string } } = { subscription: { ok: false, detail: '' }, api: { ok: false, detail: '' } }
-    if (!cliAvailable()) out.subscription.detail = 'Claude Code CLI is not installed in this container'
-    else if (!s.subscriptionToken) out.subscription.detail = 'No subscription token saved'
-    else out.subscription = { ok: true, detail: 'CLI installed and token saved (verified on first use)' }
-    if (!s.apiKey) out.api.detail = 'No API key saved'
-    else {
-      try {
-        const client = new Anthropic({ apiKey: s.apiKey, timeout: 20_000 })
-        const m = await client.models.retrieve(s.model)
-        out.api = { ok: true, detail: `Key accepted · ${m.display_name ?? s.model}` }
-      } catch (e) {
-        out.api = { ok: false, detail: e instanceof Anthropic.APIError ? `${e.status} ${e.message}` : (e as Error).message }
-      }
+    const out: { subscription?: { ok: boolean; detail: string }; api?: { ok: boolean; detail: string } } = {}
+    if (which === 'both' || which === 'subscription') {
+      if (!cliAvailable()) out.subscription = { ok: false, detail: 'Claude Code CLI is not installed in this container' }
+      else if (!s.subscriptionToken) out.subscription = { ok: false, detail: 'No subscription token saved' }
+      else out.subscription = await pingCli(s.subscriptionToken, s.model)
+      recordVerification('subscription', out.subscription.ok, out.subscription.detail)
     }
-    res.json(out)
+    if (which === 'both' || which === 'api') {
+      if (!s.apiKey) out.api = { ok: false, detail: 'No API key saved' }
+      else {
+        try {
+          const client = new Anthropic({ apiKey: s.apiKey, timeout: 20_000 })
+          const m = await client.models.retrieve(s.model)
+          out.api = { ok: true, detail: `Key accepted · ${m.display_name ?? s.model}` }
+        } catch (e) {
+          out.api = { ok: false, detail: e instanceof Anthropic.APIError ? `${e.status} ${e.message}` : (e as Error).message }
+        }
+      }
+      recordVerification('api', out.api.ok, out.api.detail)
+    }
+    res.json({ ...out, settings: publicAiSettings() })
   }),
 )
 

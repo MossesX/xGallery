@@ -116,3 +116,40 @@ function summarizeInput(input: unknown): string {
   const key = ['file_path', 'path', 'pattern', 'command', 'query'].find((k) => typeof o[k] === 'string')
   return key ? String(o[key]).slice(0, 160) : ''
 }
+
+/** Verify a subscription token with the smallest possible turn. Resolves with the model's one-line reply. */
+export function pingCli(token: string, model: string | undefined, timeoutMs = 90_000): Promise<{ ok: boolean; detail: string }> {
+  return new Promise((resolve) => {
+    const args = ['-p', '--output-format', 'json', '--max-turns', '1', '--no-chrome', '--disallowedTools', 'Bash', 'Edit', 'Write']
+    if (model) args.push('--model', model)
+    args.push('--', 'Reply with exactly: OK')
+    const env: NodeJS.ProcessEnv = { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: token, CI: '1', TERM: 'dumb' }
+    delete env.ANTHROPIC_API_KEY
+    delete env.ANTHROPIC_AUTH_TOKEN
+    let out = ''
+    let err = ''
+    const child = spawn(process.env.CLAUDE_BIN ?? 'claude', args, { cwd: process.cwd(), env, stdio: ['ignore', 'pipe', 'pipe'] })
+    const timer = setTimeout(() => {
+      child.kill('SIGTERM')
+      resolve({ ok: false, detail: 'Timed out waiting for Claude Code' })
+    }, timeoutMs)
+    child.stdout.on('data', (c: Buffer) => (out += c.toString('utf8')))
+    child.stderr.on('data', (c: Buffer) => (err += c.toString('utf8')))
+    child.on('error', (e) => {
+      clearTimeout(timer)
+      resolve({ ok: false, detail: e.message })
+    })
+    child.on('close', (code) => {
+      clearTimeout(timer)
+      let parsed: { is_error?: boolean; result?: string; subtype?: string } | null = null
+      try {
+        const line = out.trim().split('\n').find((l) => l.trim().startsWith('{')) ?? '{}'
+        parsed = JSON.parse(line)
+      } catch {
+        parsed = null
+      }
+      if (code === 0 && parsed && !parsed.is_error) resolve({ ok: true, detail: `Claude Code answered: ${String(parsed.result ?? '').trim().slice(0, 80) || 'ok'}` })
+      else resolve({ ok: false, detail: (parsed?.result ?? err.trim().split('\n').slice(-2).join(' ') ?? `exit code ${code}`).toString().slice(0, 300) || `exit code ${code}` })
+    })
+  })
+}

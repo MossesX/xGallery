@@ -7,29 +7,87 @@ import { DEFAULT_AI, type AiSettings, type RunResult, type StreamEvent } from '.
 
 export const MASK = '••••••••'
 
+/** Saved settings, with the container's environment as a fallback for either credential. */
 export function getAiSettings(): AiSettings {
-  return { ...DEFAULT_AI, ...getSetting<Partial<AiSettings>>('ai', {}) }
+  const s = { ...DEFAULT_AI, ...getSetting<Partial<AiSettings>>('ai', {}) }
+  if (!s.subscriptionToken && process.env.CLAUDE_CODE_OAUTH_TOKEN) s.subscriptionToken = process.env.CLAUDE_CODE_OAUTH_TOKEN
+  if (!s.apiKey && process.env.ANTHROPIC_API_KEY) s.apiKey = process.env.ANTHROPIC_API_KEY
+  return s
+}
+
+export type CredentialSource = 'none' | 'settings' | 'env'
+
+export function credentialSources(): { subscription: CredentialSource; api: CredentialSource } {
+  const saved = getSetting<Partial<AiSettings>>('ai', {})
+  return {
+    subscription: saved.subscriptionToken ? 'settings' : process.env.CLAUDE_CODE_OAUTH_TOKEN ? 'env' : 'none',
+    api: saved.apiKey ? 'settings' : process.env.ANTHROPIC_API_KEY ? 'env' : 'none',
+  }
 }
 
 /** Owner-facing view: secrets are masked, never echoed back. */
-export function publicAiSettings(): Omit<AiSettings, 'subscriptionToken' | 'apiKey'> & { hasSubscriptionToken: boolean; hasApiKey: boolean } {
+export function publicAiSettings(): Omit<AiSettings, 'subscriptionToken' | 'apiKey'> & { hasSubscriptionToken: boolean; hasApiKey: boolean; sources: { subscription: CredentialSource; api: CredentialSource }; usage: { subscription: number; api: number; lastBackend: string | null; lastAt: number | null } } {
   const s = getAiSettings()
   const { subscriptionToken, apiKey, ...rest } = s
-  return { ...rest, hasSubscriptionToken: !!subscriptionToken, hasApiKey: !!apiKey }
+  const rows = db.prepare("SELECT meta, created_at FROM ai_messages WHERE role = 'assistant' ORDER BY id DESC LIMIT 2000").all() as { meta: string; created_at: number }[]
+  const usage = { subscription: 0, api: 0, lastBackend: null as string | null, lastAt: null as number | null }
+  for (const r of rows) {
+    let backend = ''
+    try {
+      backend = (JSON.parse(r.meta) as { backend?: string }).backend ?? ''
+    } catch {
+      /* ignore */
+    }
+    if (backend === 'subscription') usage.subscription++
+    else if (backend === 'api') usage.api++
+    if (!usage.lastBackend && backend) {
+      usage.lastBackend = backend
+      usage.lastAt = r.created_at
+    }
+  }
+  return { ...rest, hasSubscriptionToken: !!subscriptionToken, hasApiKey: !!apiKey, sources: credentialSources(), usage }
+}
+
+export function recordVerification(which: 'subscription' | 'api', ok: boolean, detail: string): void {
+  const cur = { ...DEFAULT_AI, ...getSetting<Partial<AiSettings>>('ai', {}) }
+  if (which === 'subscription') {
+    cur.subscriptionVerifiedAt = ok ? now() : null
+    cur.subscriptionVerifiedDetail = detail
+  } else {
+    cur.apiVerifiedAt = ok ? now() : null
+    cur.apiVerifiedDetail = detail
+  }
+  setSetting('ai', cur)
 }
 
 export function saveAiSettings(patch: Partial<AiSettings> & { clearSubscriptionToken?: boolean; clearApiKey?: boolean }): void {
-  const cur = getAiSettings()
+  const cur = { ...DEFAULT_AI, ...getSetting<Partial<AiSettings>>('ai', {}) }
   const next: AiSettings = { ...cur }
   if (typeof patch.enabled === 'boolean') next.enabled = patch.enabled
   if (typeof patch.allowCodeChanges === 'boolean') next.allowCodeChanges = patch.allowCodeChanges
   if (typeof patch.model === 'string' && patch.model.trim()) next.model = patch.model.trim().slice(0, 80)
   if (typeof patch.extraInstructions === 'string') next.extraInstructions = patch.extraInstructions.slice(0, 8000)
   if (typeof patch.assistantName === 'string' && patch.assistantName.trim()) next.assistantName = patch.assistantName.trim().slice(0, 40)
-  if (typeof patch.subscriptionToken === 'string' && patch.subscriptionToken && patch.subscriptionToken !== MASK) next.subscriptionToken = patch.subscriptionToken.trim()
-  if (typeof patch.apiKey === 'string' && patch.apiKey && patch.apiKey !== MASK) next.apiKey = patch.apiKey.trim()
-  if (patch.clearSubscriptionToken) next.subscriptionToken = ''
-  if (patch.clearApiKey) next.apiKey = ''
+  if (typeof patch.subscriptionToken === 'string' && patch.subscriptionToken && patch.subscriptionToken !== MASK) {
+    next.subscriptionToken = patch.subscriptionToken.trim()
+    next.subscriptionVerifiedAt = null
+    next.subscriptionVerifiedDetail = ''
+  }
+  if (typeof patch.apiKey === 'string' && patch.apiKey && patch.apiKey !== MASK) {
+    next.apiKey = patch.apiKey.trim()
+    next.apiVerifiedAt = null
+    next.apiVerifiedDetail = ''
+  }
+  if (patch.clearSubscriptionToken) {
+    next.subscriptionToken = ''
+    next.subscriptionVerifiedAt = null
+    next.subscriptionVerifiedDetail = ''
+  }
+  if (patch.clearApiKey) {
+    next.apiKey = ''
+    next.apiVerifiedAt = null
+    next.apiVerifiedDetail = ''
+  }
   setSetting('ai', next)
 }
 

@@ -32,6 +32,10 @@ export interface AiSettings {
   allowCodeChanges: boolean
   extraInstructions: string
   assistantName: string
+  subscriptionVerifiedAt: number | null
+  subscriptionVerifiedDetail: string
+  apiVerifiedAt: number | null
+  apiVerifiedDetail: string
 }
 
 export const DEFAULT_AI: AiSettings = {
@@ -42,4 +46,8 @@ export const DEFAULT_AI: AiSettings = {
   allowCodeChanges: false,
   extraInstructions: '',
   assistantName: 'Amber',
+  subscriptionVerifiedAt: null,
+  subscriptionVerifiedDetail: '',
+  apiVerifiedAt: null,
+  apiVerifiedDetail: '',
 }

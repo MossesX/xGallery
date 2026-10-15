@@ -266,6 +266,8 @@ export interface AiStatus {
   sourceVersion: string
 }
 
+export type CredentialSource = 'none' | 'settings' | 'env'
+
 export interface AiSettingsView {
   enabled: boolean
   model: string
@@ -274,6 +276,12 @@ export interface AiSettingsView {
   assistantName: string
   hasSubscriptionToken: boolean
   hasApiKey: boolean
+  subscriptionVerifiedAt: number | null
+  subscriptionVerifiedDetail: string
+  apiVerifiedAt: number | null
+  apiVerifiedDetail: string
+  sources: { subscription: CredentialSource; api: CredentialSource }
+  usage: { subscription: number; api: number; lastBackend: string | null; lastAt: number | null }
 }
 
 export interface AiConversation {

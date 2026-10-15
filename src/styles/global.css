@@ -1384,3 +1384,18 @@ img.is-loaded { opacity: 1; transition: opacity 0.2s var(--ease); }
 .table tr.is-selected td { background: color-mix(in srgb, var(--c-primary) 8%, transparent); }
 .viewing-bar { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 6px 12px; background: var(--c-accent); color: var(--c-accent-text, #fff); font-size: 0.82rem; }
 .viewing-bar .btn { background: rgba(255, 255, 255, 0.15); color: inherit; border-color: rgba(255, 255, 255, 0.3); }
+
+/* ---------- assistant connection panel ---------- */
+.conn-rows { display: flex; flex-direction: column; gap: 10px; }
+.conn-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: var(--radius); border: 1px solid var(--c-border); background: var(--c-surface-hover); }
+.conn-row.is-connected { border-color: color-mix(in srgb, var(--c-success) 45%, var(--c-border)); }
+.conn-row.is-failed { border-color: color-mix(in srgb, var(--c-danger) 45%, var(--c-border)); }
+.conn-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.conn-dot { width: 10px; height: 10px; border-radius: 999px; background: var(--c-border); flex-shrink: 0; box-shadow: 0 0 0 3px color-mix(in srgb, var(--c-border) 40%, transparent); }
+.conn-dot.connected { background: var(--c-success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c-success) 30%, transparent); }
+.conn-dot.unverified { background: var(--c-primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c-primary) 30%, transparent); }
+.conn-dot.failed, .conn-dot.blocked { background: var(--c-danger); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c-danger) 30%, transparent); }
+.badge.danger { color: var(--c-danger); border-color: color-mix(in srgb, var(--c-danger) 50%, transparent); }
+.setup-steps { margin-top: 6px; }
+.setup-steps summary { cursor: pointer; }
+.setup-steps ol { margin: 8px 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }

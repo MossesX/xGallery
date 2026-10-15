@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, Code2, Download, FlaskConical, KeyRound, RefreshCw, Sparkles, X } from 'lucide-react'
+import { Check, Code2, Download, FlaskConical, KeyRound, Plug, RefreshCw, Sparkles, X } from 'lucide-react'
 import { api } from '../../api/client'
 import { useAiSettings } from '../../api/hooks'
 import type { AiSettingsView } from '../../api/types'
@@ -21,7 +21,7 @@ export function AssistantSettingsPage() {
   const notify = useUI((s) => s.notify)
   const { data } = useAiSettings()
   const [draft, setDraft] = useState<Draft | null>(null)
-  const [test, setTest] = useState<{ subscription: { ok: boolean; detail: string }; api: { ok: boolean; detail: string } } | null>(null)
+  const [testing, setTesting] = useState<'both' | 'subscription' | 'api' | null>(null)
   useEffect(() => {
     if (data && !draft) setDraft({ enabled: data.settings.enabled, model: data.settings.model, allowCodeChanges: data.settings.allowCodeChanges, extraInstructions: data.settings.extraInstructions, assistantName: data.settings.assistantName, subscriptionToken: '', apiKey: '' })
   }, [data, draft])
@@ -38,9 +38,18 @@ export function AssistantSettingsPage() {
     onError: (e: Error) => notify(e.message, 'error'),
   })
   const runTest = useMutation({
-    mutationFn: () => api.post<typeof test>('/api/ai/settings/test', {}),
-    onSuccess: (r) => setTest(r),
+    mutationFn: (which: 'both' | 'subscription' | 'api') => {
+      setTesting(which)
+      return api.post<{ subscription?: { ok: boolean; detail: string }; api?: { ok: boolean; detail: string } }>('/api/ai/settings/test', { which })
+    },
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ['ai-settings'] })
+      qc.invalidateQueries({ queryKey: ['ai-status'] })
+      const bits = [r.subscription && `Subscription: ${r.subscription.ok ? 'connected' : 'failed'}`, r.api && `API: ${r.api.ok ? 'connected' : 'failed'}`].filter(Boolean)
+      notify(bits.join(' · '), (r.subscription?.ok ?? true) && (r.api?.ok ?? true) ? 'success' : 'error')
+    },
     onError: (e: Error) => notify(e.message, 'error'),
+    onSettled: () => setTesting(null),
   })
   const reset = useMutation({
     mutationFn: () => api.post('/api/ai/workspace/reset', {}),
@@ -105,43 +114,84 @@ export function AssistantSettingsPage() {
           <section className="card stack" style={{ gap: 'calc(var(--space) * 2)' }}>
             <div className="row between">
               <h3 style={{ margin: 0 }}>
-                <KeyRound size={15} /> Backends
+                <Plug size={15} /> Connection
               </h3>
-              <button className="btn sm" onClick={() => runTest.mutate()} disabled={runTest.isPending}>
-                <FlaskConical size={14} /> {runTest.isPending ? 'Testing…' : 'Test'}
+              <button className="btn sm" onClick={() => runTest.mutate('both')} disabled={!!testing}>
+                <FlaskConical size={14} /> {testing === 'both' ? 'Verifying…' : 'Verify both'}
               </button>
             </div>
+            <div className="conn-rows">
+              <ConnRow
+                title="1 · Claude subscription"
+                hint="Primary. Turns run through Claude Code on your plan; no API charges."
+                has={s.hasSubscriptionToken}
+                source={s.sources.subscription}
+                verifiedAt={s.subscriptionVerifiedAt}
+                detail={s.subscriptionVerifiedDetail}
+                extra={!data.cliInstalled ? 'Claude Code CLI is missing in this container' : ''}
+                busy={testing === 'subscription' || testing === 'both'}
+                onVerify={() => runTest.mutate('subscription')}
+              />
+              <ConnRow
+                title="2 · Backup: Anthropic API"
+                hint="Used when the subscription backend is missing or fails. Billed per token."
+                has={s.hasApiKey}
+                source={s.sources.api}
+                verifiedAt={s.apiVerifiedAt}
+                detail={s.apiVerifiedDetail}
+                busy={testing === 'api' || testing === 'both'}
+                onVerify={() => runTest.mutate('api')}
+              />
+            </div>
+            <p className="muted small" style={{ margin: 0 }}>
+              Used so far: {s.usage.subscription} subscription turn{s.usage.subscription === 1 ? '' : 's'}, {s.usage.api} API turn{s.usage.api === 1 ? '' : 's'}
+              {s.usage.lastBackend ? ` · last reply via ${s.usage.lastBackend === 'subscription' ? 'subscription' : 'API'} ${s.usage.lastAt ? new Date(s.usage.lastAt).toLocaleString() : ''}` : ''}.
+            </p>
+          </section>
+
+          <section className="card stack" style={{ gap: 'calc(var(--space) * 2)' }}>
+            <h3 style={{ margin: 0 }}>
+              <KeyRound size={15} /> Credentials
+            </h3>
             <div className="field">
-              <label>
-                1 · Claude subscription token {s.hasSubscriptionToken ? <span className="badge success">saved</span> : <span className="badge">not set</span>}
-                {!data.cliInstalled && <span className="badge accent">CLI missing in this container</span>}
-              </label>
+              <label>Claude subscription token</label>
               <input className="input" type="password" autoComplete="off" value={draft.subscriptionToken} onChange={(e) => setDraft({ ...draft, subscriptionToken: e.target.value })} placeholder={s.hasSubscriptionToken ? 'Paste a new token to replace it' : 'sk-ant-oat01-…'} />
-              <p className="muted small" style={{ margin: '6px 0 0' }}>
-                On your own machine run <code>claude setup-token</code> (Claude Code CLI, signed in to your Claude subscription) and paste the token here. Turns run through Claude Code on your plan, no API charges.
-              </p>
-              {test && <p className={`small ${test.subscription.ok ? 'success' : 'muted'}`}>{test.subscription.ok ? <Check size={12} /> : <X size={12} />} {test.subscription.detail}</p>}
+              <details className="setup-steps">
+                <summary className="muted small">How to get the token</summary>
+                <ol className="small">
+                  <li>
+                    On your own computer install Claude Code: <code>npm install -g @anthropic-ai/claude-code</code>
+                  </li>
+                  <li>
+                    Sign in to your Claude subscription: <code>claude login</code>
+                  </li>
+                  <li>
+                    Create a long-lived token: <code>claude setup-token</code>
+                  </li>
+                  <li>Paste the token here, save, then press Verify. The token is stored on the server and never shown again.</li>
+                </ol>
+                <p className="muted small" style={{ margin: 0 }}>
+                  Alternative: set <code>CLAUDE_CODE_OAUTH_TOKEN</code> in the container environment; a saved token here takes precedence.
+                </p>
+              </details>
             </div>
             <div className="field">
-              <label>
-                2 · Anthropic API key (fallback) {s.hasApiKey ? <span className="badge success">saved</span> : <span className="badge">not set</span>}
-              </label>
+              <label>Anthropic API key (backup)</label>
               <input className="input" type="password" autoComplete="off" value={draft.apiKey} onChange={(e) => setDraft({ ...draft, apiKey: e.target.value })} placeholder={s.hasApiKey ? 'Paste a new key to replace it' : 'sk-ant-api03-…'} />
               <p className="muted small" style={{ margin: '6px 0 0' }}>
-                Used only when the subscription backend is missing or fails. Billed per token to your Anthropic account.
+                From console.anthropic.com → API keys. Alternative: set <code>ANTHROPIC_API_KEY</code> in the container environment.
               </p>
-              {test && <p className={`small ${test.api.ok ? 'success' : 'muted'}`}>{test.api.ok ? <Check size={12} /> : <X size={12} />} {test.api.detail}</p>}
             </div>
             <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
               <button className="btn primary" onClick={() => save.mutate({ subscriptionToken: draft.subscriptionToken || undefined, apiKey: draft.apiKey || undefined })} disabled={save.isPending || (!draft.subscriptionToken && !draft.apiKey)}>
                 Save credentials
               </button>
-              {s.hasSubscriptionToken && (
+              {s.sources.subscription === 'settings' && (
                 <button className="btn ghost sm" onClick={() => save.mutate({ clearSubscriptionToken: true })}>
                   Remove token
                 </button>
               )}
-              {s.hasApiKey && (
+              {s.sources.api === 'settings' && (
                 <button className="btn ghost sm" onClick={() => save.mutate({ clearApiKey: true })}>
                   Remove API key
                 </button>
@@ -202,6 +252,36 @@ export function AssistantSettingsPage() {
           </section>
         </div>
       </div>
+    </div>
+  )
+}
+
+function ConnRow({ title, hint, has, source, verifiedAt, detail, extra, busy, onVerify }: { title: string; hint: string; has: boolean; source: 'none' | 'settings' | 'env'; verifiedAt: number | null; detail: string; extra?: string; busy: boolean; onVerify: () => void }) {
+  const state = extra ? 'blocked' : !has ? 'missing' : verifiedAt ? 'connected' : detail ? 'failed' : 'unverified'
+  return (
+    <div className={`conn-row is-${state}`}>
+      <span className={`conn-dot ${state}`} aria-hidden />
+      <div className="conn-main">
+        <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+          <strong>{title}</strong>
+          {state === 'connected' && <span className="badge success">Connected</span>}
+          {state === 'unverified' && <span className="badge primary">Saved · not verified</span>}
+          {state === 'failed' && <span className="badge danger">Failed</span>}
+          {state === 'missing' && <span className="badge">Not set</span>}
+          {state === 'blocked' && <span className="badge accent">Unavailable</span>}
+          {source === 'env' && <span className="badge">from environment</span>}
+        </div>
+        <div className="muted small">{hint}</div>
+        {(extra || detail) && (
+          <div className={`small ${state === 'connected' ? 'success' : 'muted'}`}>
+            {state === 'connected' ? <Check size={12} /> : <X size={12} />} {extra || detail}
+            {verifiedAt ? ` · verified ${new Date(verifiedAt).toLocaleString()}` : ''}
+          </div>
+        )}
+      </div>
+      <button className="btn sm" onClick={onVerify} disabled={busy || !has || !!extra}>
+        {busy ? 'Verifying…' : 'Verify'}
+      </button>
     </div>
   )
 }
