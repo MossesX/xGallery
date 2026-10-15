@@ -3,6 +3,7 @@ import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useLogin, useMe, useSettings } from '../api/hooks'
 import { useUiConfig } from '../ui/config'
 import { PublicShell } from '../components/PublicShell'
+import { useUI } from '../store/ui'
 import { AmberMark } from '../brand/Logo'
 
 export function LoginPage() {
@@ -10,6 +11,8 @@ export function LoginPage() {
   const { data } = useSettings()
   const ui = useUiConfig()
   const login = useLogin()
+  const sessionEnded = useUI((s) => s.sessionEnded)
+  const setSessionEnded = useUI((s) => s.setSessionEnded)
   const navigate = useNavigate()
   const location = useLocation()
   const [username, setUsername] = useState('')
@@ -23,6 +26,7 @@ export function LoginPage() {
     e.preventDefault()
     try {
       await login.mutateAsync({ username, password })
+      setSessionEnded(false)
       navigate(from, { replace: true })
     } catch {
       /* error shown below */
@@ -40,6 +44,7 @@ export function LoginPage() {
               <h2 style={{ margin: 0 }}>Sign in</h2>
             </div>
           </div>
+          {sessionEnded && !login.error && <div className="error" data-session-ended="">Your session has ended (signed out elsewhere, a password reset, or it expired). Sign in again to continue where you were.</div>}
           {login.error && <div className="error">{login.error.message}</div>}
           <div className="field">
             <label htmlFor="username">Username</label>

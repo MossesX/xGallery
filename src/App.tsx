@@ -13,7 +13,7 @@ import { GalleryPage } from './pages/GalleryPage'
 import { PublicAlbumPage, PublicDirectoryPage, PublicGalleryPage } from './pages/PublicGalleryPage'
 import { GalleriesPage } from './pages/GalleriesPage'
 import { PublicHomePage } from './pages/PublicHomePage'
-import { useMe, useSettings } from './api/hooks'
+import { keys, useMe, useSettings } from './api/hooks'
 import { DevLayout } from './pages/dev/DevLayout'
 import { DevOverviewPage } from './pages/dev/DevOverviewPage'
 import { DevAssistantPage } from './pages/dev/DevAssistantPage'
@@ -41,7 +41,8 @@ import { AlbumsPage } from './pages/admin/AlbumsPage'
 import { AlbumEditorPage } from './pages/admin/AlbumEditorPage'
 import { ThemesPage } from './pages/admin/ThemesPage'
 import { AppearancePage } from './pages/admin/AppearancePage'
-import { ApiError } from './api/client'
+import { ApiError, authState } from './api/client'
+import { useUI } from './store/ui'
 import { MeLayout } from './pages/me/MeLayout'
 import { ProfilePage } from './pages/me/ProfilePage'
 import { BuddiesPage } from './pages/me/BuddiesPage'
@@ -68,6 +69,18 @@ const queryClient = new QueryClient({
       staleTime: 15_000,
     },
   },
+})
+
+// A 401 on any signed-in request means the session is gone: forget the user so the route guards send
+// the page to sign-in (with a note), instead of leaving a dead console on screen.
+let lastSessionEnd = 0
+authState.listeners.add(() => {
+  if (!queryClient.getQueryData(keys.me)) return
+  queryClient.setQueryData(keys.me, null)
+  queryClient.removeQueries({ queryKey: ['session'] })
+  useUI.getState().setSessionEnded(true)
+  if (Date.now() - lastSessionEnd > 5000) useUI.getState().notify('Your session has ended. Sign in again to continue.', 'error')
+  lastSessionEnd = Date.now()
 })
 
 function AlbumEditorRedirect() {

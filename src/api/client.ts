@@ -27,9 +27,14 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
   const cached = res.headers.get('X-Offline-Cache')
   if (method === 'GET') setCached(cached && cached !== 'none' ? cached : null)
   const data = (await res.json().catch(() => ({}))) as { error?: string }
+  // Only the guards' own message means the session is gone; wrong passwords/PINs are 401s too but stay on the page.
+  if (res.status === 401 && data.error === 'Sign in required' && !/^\/api\/auth\/(login|me)/.test(url)) authState.listeners.forEach((l) => l())
   if (!res.ok) throw new ApiError(res.status, data.error ?? res.statusText)
   return data as T
 }
+
+/** Fired when the server answers 401 to a signed-in page: the session ended (sign-out elsewhere, owner reset, expiry). */
+export const authState: { listeners: Set<() => void> } = { listeners: new Set() }
 
 export const api = {
   get: <T>(url: string) => request<T>('GET', url),

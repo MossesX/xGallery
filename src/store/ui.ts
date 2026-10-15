@@ -26,6 +26,9 @@ interface UIState {
   setPreviewUi: (u: Partial<UiConfig> | null) => void
   designMode: boolean
   setDesignMode: (on: boolean) => void
+  /** Set when the server stopped recognising the session; the sign-in page explains it. */
+  sessionEnded: boolean
+  setSessionEnded: (v: boolean) => void
   toast: { id: number; message: string; tone: 'info' | 'error' | 'success' } | null
   notify: (message: string, tone?: 'info' | 'error' | 'success') => void
   dismissToast: () => void
@@ -56,6 +59,8 @@ export const useUI = create<UIState>()(
       setPreviewUi: (previewUi) => set({ previewUi }),
       designMode: false,
       setDesignMode: (designMode) => set({ designMode }),
+      sessionEnded: false,
+      setSessionEnded: (sessionEnded) => set({ sessionEnded }),
       toast: null,
       notify: (message, tone = 'info') => set({ toast: { id: Date.now(), message, tone } }),
       dismissToast: () => set({ toast: null }),
