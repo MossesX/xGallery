@@ -1796,3 +1796,31 @@ body.density-compact { --space: 6px; }
 .textarea.sm { padding: 4px 6px; font-size: 0.8rem; }
 .spin { animation: spin 0.9s linear infinite; }
 button.link { background: none; border: 0; padding: 0; color: var(--c-primary); font: inherit; cursor: pointer; text-decoration: underline; }
+
+/* ---- GitHub manager ---- */
+.gh-row { cursor: pointer; }
+.gh-row:hover td { background: var(--c-surface-hover); }
+.gh-feed { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 0.84rem; }
+.gh-feed li { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+.gh-body p { margin: 0 0 6px; font-size: 0.88rem; }
+.gh-comment { border: 1px solid var(--c-border); border-radius: 10px; padding: 8px 10px; background: var(--c-surface); }
+.gh-patch { margin: 0; font-family: var(--font-mono); font-size: 0.72rem; line-height: 1.4; background: #0f0c09; color: #e8e2d8; border: 1px solid var(--c-border); border-radius: 0 0 8px 8px; padding: 6px 0; max-height: 50vh; overflow: auto; }
+.gh-patch div { padding: 0 10px; white-space: pre; }
+.gh-patch .add { background: rgba(34, 197, 94, 0.15); color: #bbf7d0; }
+.gh-patch .del { background: rgba(239, 68, 68, 0.15); color: #fecaca; }
+.gh-patch .hunk { color: #93c5fd; background: rgba(59, 130, 246, 0.12); }
+.gh-file { border: 1px solid var(--c-border); border-radius: 8px; overflow: hidden; }
+.gh-file-head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 10px; border: 0; background: var(--c-surface); color: inherit; font: inherit; cursor: pointer; }
+.gh-file-head:hover { background: var(--c-surface-hover); }
+.gh-wf { display: inline-flex; align-items: center; gap: 0; }
+.gh-jobs { display: flex; flex-direction: column; gap: 6px; }
+.gh-job { border: 1px solid var(--c-border); border-radius: 10px; padding: 6px 10px; }
+.gh-job.active { border-color: var(--c-primary); }
+.gh-job-head { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; padding: 2px 0; }
+.gh-steps { list-style: none; margin: 4px 0 0; padding: 0 0 0 4px; display: flex; flex-direction: column; gap: 2px; font-size: 0.8rem; }
+.gh-steps li { display: flex; align-items: center; gap: 6px; }
+.gh-step-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c-border); flex: none; }
+.gh-steps li.ok .gh-step-dot { background: var(--c-success); }
+.gh-steps li.fail .gh-step-dot { background: #ef4444; }
+.gh-steps li.skip { opacity: 0.6; }
+.link.small { font-size: 0.8rem; }

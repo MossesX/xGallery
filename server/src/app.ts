@@ -22,6 +22,8 @@ import { notificationsRouter } from './routes/notifications.js'
 import { devRouter } from './routes/dev.js'
 import { tasksRouter } from './routes/tasks.js'
 import { vpsRouter } from './routes/vps.js'
+import { githubRouter, githubWebhookRouter } from './routes/github.js'
+import { startGithubPolling } from './github/snapshot.js'
 import { attachDev, sweepDevSessions } from './dev.js'
 import { adminRouter } from './routes/admin.js'
 
@@ -32,6 +34,7 @@ else removeDemoCommunity()
 pruneSessions()
 setInterval(pruneSessions, 6 * 3600 * 1000).unref()
 setInterval(sweepDevSessions, 5 * 60 * 1000).unref()
+startGithubPolling()
 
 export const app = express()
 app.disable('x-powered-by')
@@ -64,10 +67,12 @@ app.use('/api', attachDev)
 // Sign-in, the shell's settings, account/contact requests, themes and private share links stay open.
 app.use('/api', (req, res, next) => {
   if (req.user || getPolicy().publicBrowsing) return next()
-  const open = req.path.startsWith('/auth') || req.path.startsWith('/settings') || req.path.startsWith('/inbox') || req.path.startsWith('/share') || req.path.startsWith('/themes') || (req.path.startsWith('/media/') && req.query.s != null)
+  const open = req.path.startsWith('/auth') || req.path.startsWith('/settings') || req.path.startsWith('/inbox') || req.path.startsWith('/share') || req.path.startsWith('/themes') || req.path.startsWith('/github/webhook') || (req.path.startsWith('/media/') && req.query.s != null)
   if (open) return next()
   res.status(401).json({ error: 'Sign in to browse this site', code: 'login_required' })
 })
+// GitHub webhook deliveries are verified against their raw body before any JSON parsing.
+app.use('/api/github/webhook', express.raw({ type: '*/*', limit: '5mb' }), githubWebhookRouter)
 app.use('/api', express.json({ limit: '1mb' }))
 app.use('/api/auth', authRouter)
 app.use('/api/users', usersRouter)
@@ -84,6 +89,7 @@ app.use('/api/notifications', notificationsRouter)
 app.use('/api/admin', adminRouter)
 app.use('/api/dev/tasks', tasksRouter)
 app.use('/api/dev/vps', vpsRouter)
+app.use('/api/dev/github', githubRouter)
 app.use('/api/dev', devRouter)
 app.use('/api/themes', themesRouter)
 app.use('/api/settings', settingsRouter)

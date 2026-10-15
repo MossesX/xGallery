@@ -22,6 +22,17 @@ site. Members sign in to browse, like and comment.
   record created in one step; SFTP file browser and editor with upload/download; ufw; systemd services,
   journal, apt, crontab, reboot; a one-shot console next to the full SSH terminal and mosh tabs.
 
+**Developer panel: GitHub manager**
+- The server holds the GitHub token, polls the repository in the background and receives signed
+  webhooks, so the browser and the Android app only ever talk to this server and always see the
+  same current state (and the last snapshot while offline).
+- Overview with live-site status (which commit is deployed, deploy in progress, one-click deploy),
+  commits and diffs, branches, pull requests (review, merge, create), issues (labels, comments,
+  assign, close), Actions (runs, jobs, steps, logs, re-run, cancel, dispatch), releases and tags,
+  code browser that commits straight to a branch, repository secrets (sealed with libsodium) and
+  variables, webhook install, GitHub inbox, collaborators, and a raw API explorer. Failed runs,
+  successful deploys, new PRs/issues and releases notify the owner in the site bell.
+
 **Theming**
 - Every theme carries a matched light *and* dark palette, display/body fonts, corner radius and density.
 - "Roll a theme" generates a harmonious theme (complementary / analogous / triadic / split / monochrome)

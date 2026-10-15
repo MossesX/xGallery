@@ -26,6 +26,7 @@ import { ShellPage } from './pages/dev/ops/ShellPage'
 import { AndroidPage } from './pages/dev/ops/AndroidPage'
 import { TerminalPage } from './pages/dev/ops/TerminalPage'
 import { VpsPage } from './pages/dev/vps/VpsPage'
+import { GithubPage } from './pages/dev/github/GithubPage'
 import { TasksSettingsPage } from './pages/dev/tasks/TasksSettingsPage'
 import { TasksWorkspace } from './pages/dev/tasks/TasksWorkspace'
 import { DevContextMenuPage, DevCssPage, DevFeaturesPage, DevFooterPage, DevHomePage, DevLayoutPage, DevNavigationPage, DevToolbarPage } from './pages/dev/DevDesignPages'
@@ -145,6 +146,7 @@ export default function App() {
                   <Route path="android" element={<AndroidPage />} />
                   <Route path="terminal" element={<TerminalPage />} />
                   <Route path="vps" element={<VpsPage />} />
+                  <Route path="github" element={<GithubPage />} />
                   <Route path="themes" element={<ThemesPage />} />
                   <Route path="appearance" element={<AppearancePage />} />
                   <Route path="navigation" element={<DevNavigationPage />} />

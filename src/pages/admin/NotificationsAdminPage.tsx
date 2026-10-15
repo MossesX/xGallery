@@ -17,6 +17,7 @@ const KINDS = [
   { id: 'inbox.contact', label: 'Messages to the owner' },
   { id: 'member.', label: 'Member milestones' },
   { id: 'security.', label: 'Security' },
+  { id: 'github.', label: 'GitHub (runs, PRs, issues, releases)' },
 ]
 
 export function kindIcon(kind: string) {
