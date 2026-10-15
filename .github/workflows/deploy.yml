@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      reset_owner_password:
+        description: 'One-time owner password reset (8+ characters). Applied on this run only; the owner must change it at first sign-in.'
+        required: false
+        default: ''
 
 env:
   IMAGE: ghcr.io/mossesx/xgallery
@@ -77,13 +82,15 @@ jobs:
           command_timeout: 20m
           script: |
             set -e
+            echo "::add-mask::${{ inputs.reset_owner_password }}"
             if ! command -v docker >/dev/null 2>&1; then
               curl -fsSL https://get.docker.com | sh
             fi
             cd /opt/xgallery
             export SITE_DOMAIN="${{ env.SITE_DOMAIN }}"
             export SOURCE_VERSION="${{ github.sha }}"
-            export RESET_OWNER_PASSWORD="${{ secrets.RESET_OWNER_PASSWORD }}"
+            export RESET_OWNER_PASSWORD="${{ inputs.reset_owner_password || secrets.RESET_OWNER_PASSWORD }}"
+            export RESET_OWNER_FORCE_CHANGE="${{ inputs.reset_owner_password != '' && '1' || '' }}"
             export HOSTINGER_API_TOKEN="${{ secrets.HOSTINGER_API_TOKEN }}"
             if docker network inspect coolify >/dev/null 2>&1; then
               echo "Coolify/Traefik detected: registering the gallery with the existing proxy"

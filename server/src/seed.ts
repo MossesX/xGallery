@@ -93,9 +93,11 @@ export function applyOwnerPasswordReset(): void {
     return
   }
   const salt = newSalt()
-  db.prepare('UPDATE users SET password_hash = ?, salt = ?, must_change_password = 0, disabled = 0 WHERE id = ?').run(hashPassword(value, salt), salt, owner.id)
+  // A reset handed in through a manual workflow run is temporary: the owner must pick a real password at sign-in.
+  const forceChange = process.env.RESET_OWNER_FORCE_CHANGE === '1' ? 1 : 0
+  db.prepare('UPDATE users SET password_hash = ?, salt = ?, must_change_password = ?, disabled = 0 WHERE id = ?').run(hashPassword(value, salt), salt, forceChange, owner.id)
   db.prepare('DELETE FROM sessions WHERE user_id = ?').run(owner.id)
   setSetting('ownerResetApplied', print)
   notifyOwner({ kind: 'security.owner_reset', title: `Owner password reset by the RESET_OWNER_PASSWORD switch for @${owner.username}`, body: 'Sign in with the new password, then remove the RESET_OWNER_PASSWORD secret so it cannot be reused.' })
-  console.log(`[reset] owner password reset for @${owner.username} (${value.length} characters); sessions ended. Remove the RESET_OWNER_PASSWORD secret now.`)
+  console.log(`[reset] owner password reset for @${owner.username} (${value.length} characters${forceChange ? ', must be changed at sign-in' : ''}); sessions ended. Remove the RESET_OWNER_PASSWORD secret now.`)
 }
