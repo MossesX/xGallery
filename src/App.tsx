@@ -94,7 +94,7 @@ function BrowsingGate({ children }: { children: React.ReactNode }) {
   const { data: user, isLoading } = useMe()
   const { data: site, isLoading: siteLoading } = useSettings()
   if (isLoading || siteLoading) return <PageLoader />
-  if (!user && site?.policy && !site.policy.publicBrowsing) return <Navigate to="/login" replace />
+  if (!user && site?.policy && !site.policy.publicBrowsing) return <Navigate to="/login" replace state={{ reason: 'closed' }} />
   return <>{children}</>
 }
 
@@ -102,7 +102,7 @@ function Root() {
   const { data: user, isLoading } = useMe()
   const { data: site, isLoading: siteLoading } = useSettings()
   if (isLoading || siteLoading) return <PageLoader />
-  if (!user && site?.policy && !site.policy.publicBrowsing) return <Navigate to="/login" replace />
+  if (!user && site?.policy && !site.policy.publicBrowsing) return <Navigate to="/login" replace state={{ reason: 'closed' }} />
   if (!user) return <PublicHomePage />
   if (user.mustChangePassword) return <Navigate to="/change-password" replace />
   return (

@@ -20,6 +20,7 @@ export function LoginPage() {
   const [password, setPassword] = useState('')
   const [recovering, setRecovering] = useState(false)
   const from = (location.state as { from?: string } | null)?.from ?? '/'
+  const closed = (location.state as { reason?: string } | null)?.reason === 'closed'
 
   if (isLoading) return null
   if (user) return <Navigate to={from} replace />
@@ -52,6 +53,7 @@ export function LoginPage() {
               <h2 style={{ margin: 0 }}>Sign in</h2>
             </div>
           </div>
+          {closed && !login.error && <div className="error" data-browsing-closed="">Public browsing is switched off, so visitors must sign in. Owner: turn it back on in Owner console → Policies → Site switches → "Visitors may browse public albums without signing in".</div>}
           {sessionEnded && !login.error && <div className="error" data-session-ended="">Your session has ended (signed out elsewhere, a password reset, or it expired). Sign in again to continue where you were.</div>}
           {login.error && <div className="error">{login.error.message}</div>}
           <div className="field">
