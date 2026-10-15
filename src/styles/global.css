@@ -1824,3 +1824,22 @@ button.link { background: none; border: 0; padding: 0; color: var(--c-primary); 
 .gh-steps li.fail .gh-step-dot { background: #ef4444; }
 .gh-steps li.skip { opacity: 0.6; }
 .link.small { font-size: 0.8rem; }
+
+/* ---- first sign-in onboarding ---- */
+.onboard-tabs { flex-wrap: wrap; }
+.avatar-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 10px; }
+.avatar-tile { position: relative; aspect-ratio: 1; border-radius: 50%; border: 3px solid transparent; cursor: pointer; display: grid; place-items: center; font: inherit; transition: transform 0.12s, border-color 0.12s; }
+.avatar-tile:hover { transform: scale(1.06); }
+.avatar-tile.selected { border-color: var(--c-text); transform: scale(1.06); }
+.avatar-emoji { font-size: 2.2rem; line-height: 1; }
+.avatar-initials { font-family: var(--font-display); font-weight: 700; font-size: 1.5rem; }
+.avatar-check { position: absolute; right: -2px; bottom: -2px; width: 24px; height: 24px; border-radius: 50%; background: var(--c-text); color: var(--c-bg); display: grid; place-items: center; }
+.onboard-upload { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 180px; border: 2px dashed var(--c-border); border-radius: 14px; cursor: pointer; padding: 16px; }
+.onboard-upload:hover { border-color: var(--c-primary); }
+.onboard-preview { width: 120px; height: 120px; border-radius: 50%; object-fit: cover; }
+.onboard-steps { list-style: none; margin: 0; padding: 0; display: flex; gap: 14px; font-size: 0.86rem; color: var(--c-text-muted); }
+.onboard-steps li { display: flex; align-items: center; gap: 6px; }
+.onboard-steps li span { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--c-border); display: grid; place-items: center; font-size: 0.72rem; }
+.onboard-steps li.active { color: var(--c-text); font-weight: 600; }
+.onboard-steps li.active span { background: var(--c-primary); color: var(--c-primary-text); border-color: var(--c-primary); }
+.onboard-steps li.done span { background: var(--c-success); color: #fff; border-color: var(--c-success); }

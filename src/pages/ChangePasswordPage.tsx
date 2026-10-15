@@ -6,6 +6,7 @@ import { api } from '../api/client'
 import { keys, useMe } from '../api/hooks'
 import type { User } from '../api/types'
 import { PublicShell } from '../components/PublicShell'
+import { OnboardingDialog } from '../components/Onboarding'
 import { useUI } from '../store/ui'
 
 /** Shown until a member whose password must be changed picks a new one. */
@@ -17,6 +18,7 @@ export function ChangePasswordPage() {
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
   const [confirm, setConfirm] = useState('')
+  const [onboard, setOnboard] = useState<User | null>(null)
   const change = useMutation({
     mutationFn: () => {
       if (next !== confirm) throw new Error('The two new passwords do not match')
@@ -27,10 +29,20 @@ export function ChangePasswordPage() {
       qc.setQueryData(keys.me, me.user)
       qc.invalidateQueries({ queryKey: ['session'] })
       notify('Password changed. Welcome!', 'success')
-      navigate('/', { replace: true })
+      // Members get the welcome steps (picture, public album); anyone without those permissions goes straight home.
+      if (me.user && (me.user.perms.canChangeProfile || me.user.perms.canUpload)) setOnboard(me.user)
+      else navigate('/', { replace: true })
     },
     onError: (e: Error) => notify(e.message, 'error'),
   })
+  if (onboard) {
+    return (
+      <PublicShell>
+        <main className="page narrow" />
+        <OnboardingDialog user={onboard} onDone={(to) => navigate(to ?? '/', { replace: true })} />
+      </PublicShell>
+    )
+  }
   return (
     <PublicShell>
       <main className="page narrow">

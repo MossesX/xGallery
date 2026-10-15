@@ -34,7 +34,7 @@ interface UIState {
 export const useUI = create<UIState>()(
   persist(
     (set) => ({
-      colorMode: 'dark',
+      colorMode: 'light',
       setColorMode: (colorMode) => set({ colorMode }),
       previewTheme: null,
       setPreviewTheme: (previewTheme) => set({ previewTheme }),

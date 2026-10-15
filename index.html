@@ -11,10 +11,10 @@
     <link rel="apple-touch-icon" href="/icon-192.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <script>
-      // Apply the persisted colour mode before first paint to avoid a light flash in dark mode.
+      // Apply the persisted colour mode before first paint (light by default) so there is no flash of the wrong mode.
       try {
         var ui = JSON.parse(localStorage.getItem('xgallery-ui') || '{}');
-        var mode = (ui.state && ui.state.colorMode) || 'dark';
+        var mode = (ui.state && ui.state.colorMode) || 'light';
         if (mode === 'system') mode = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
         document.documentElement.dataset.mode = mode;
         document.documentElement.style.colorScheme = mode;
