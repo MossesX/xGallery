@@ -5,7 +5,7 @@ import { requirePerm, requireUser } from '../auth.js'
 import { canManageGallery, canViewAlbum, galleryOf, isOwner, managedGalleryIds, visibleAlbumRows } from '../access.js'
 import { HttpError, bool, num, slugify, str, wrap, IdRow } from '../util.js'
 import { albumJson, commentJson, mediaJson } from '../serialize.js'
-import { removeMediaFiles } from './media.js'
+import { removeMediaFiles, visibleComments } from './media.js'
 import { track, logActivity } from '../activity.js'
 import { notify, notifyOwner } from '../notifications.js'
 import { writeZip } from '../zip.js'
@@ -13,6 +13,7 @@ import path from 'node:path'
 import { existsSync } from 'node:fs'
 import { MEDIA_DIR } from '../db.js'
 import { galleryById } from '../access.js'
+import { getPolicy } from '../policy.js'
 
 export const albumsRouter = Router()
 
@@ -139,7 +140,7 @@ albumsRouter.get(
       .prepare('SELECT c.*, u.display_name, u.username, u.avatar_path FROM comments c LEFT JOIN users u ON u.id = c.user_id WHERE c.album_id = ? AND c.media_id IS NULL ORDER BY c.created_at')
       .all(row.id) as IdRow[]
     const manage = canManageGallery(req.user, row.gallery_id)
-    res.json({ album: albumJson(row, req.user!.id, { access: manage }), media: media.map((m) => mediaJson(m, req.user!.id)), comments: comments.map(commentJson), canManage: manage })
+    res.json({ album: albumJson(row, req.user!.id, { access: manage }), media: media.map((m) => mediaJson(m, req.user!.id)), comments: visibleComments(req, comments, row.gallery_id).map(commentJson), canManage: manage })
   }),
 )
 
@@ -305,7 +306,7 @@ albumsRouter.get(
     const comments = db
       .prepare('SELECT c.*, u.display_name, u.username, u.avatar_path FROM comments c LEFT JOIN users u ON u.id = c.user_id WHERE c.album_id = ? AND c.media_id IS NULL ORDER BY c.created_at')
       .all(row.id) as IdRow[]
-    res.json({ comments: comments.map(commentJson) })
+    res.json({ comments: visibleComments(req, comments, row.gallery_id).map(commentJson) })
   }),
 )
 
@@ -317,12 +318,14 @@ albumsRouter.post(
     const row = loadAlbum(req, req.params.id as string)
     const body = str(req.body?.body, 2000)
     if (!body) throw new HttpError(400, 'Comment cannot be empty')
-    const info = db.prepare('INSERT INTO comments(user_id, album_id, body, created_at) VALUES (?, ?, ?, ?)').run(req.user!.id, row.id, body, now())
+    const held = getPolicy().moderateComments && !canManageGallery(req.user, row.gallery_id)
+    const info = db.prepare('INSERT INTO comments(user_id, album_id, body, created_at, approved) VALUES (?, ?, ?, ?, ?)').run(req.user!.id, row.id, body, now(), held ? 0 : 1)
     const c = db.prepare('SELECT c.*, u.display_name, u.username, u.avatar_path FROM comments c JOIN users u ON u.id = c.user_id WHERE c.id = ?').get(info.lastInsertRowid as number) as IdRow
-    track(req, 'comment.album', { targetType: 'album', targetId: row.id, targetLabel: String(row.title ?? ''), detail: { body: String(c.body ?? '').slice(0, 140) } })
+    track(req, 'comment.album', { targetType: 'album', targetId: row.id, targetLabel: String(row.title ?? ''), detail: { body: String(c.body ?? '').slice(0, 140), held } })
     const albumOwner = galleryById(row.gallery_id)?.owner_user_id
-    if (albumOwner && albumOwner !== req.user!.id) notify({ userId: albumOwner, kind: 'comment.album', title: `${req.user!.display_name} commented on “${row.title}”`, body: String(c.body ?? '').slice(0, 200), actorId: req.user!.id, data: { albumId: row.id, slug: row.slug } })
-    res.status(201).json({ comment: commentJson(c) })
+    if (albumOwner && albumOwner !== req.user!.id)
+      notify({ userId: albumOwner, kind: held ? 'comment.pending' : 'comment.album', title: held ? `${req.user!.display_name} left a comment on “${row.title}” that needs your approval` : `${req.user!.display_name} commented on “${row.title}”`, body: String(c.body ?? '').slice(0, 200), actorId: req.user!.id, data: { albumId: row.id, slug: row.slug, commentId: c.id } })
+    res.status(201).json({ comment: commentJson(c), held })
   }),
 )
 

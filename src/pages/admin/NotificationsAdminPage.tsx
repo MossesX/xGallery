@@ -38,6 +38,7 @@ export function notificationLink(n: Notification): string | null {
   if (n.kind === 'message.new' && d.fromId) return `/me/messages/${d.fromId}`
   if ((n.kind === 'comment.media' || n.kind === 'media.like' || n.kind === 'media.reaction') && d.albumSlug) return `/album/${d.albumSlug}${d.mediaId ? `?m=${d.mediaId}` : ''}`
   if (n.kind === 'comment.album' && d.slug) return `/album/${d.slug}`
+  if (n.kind === 'comment.pending') return d.albumSlug ? `/album/${d.albumSlug}${d.mediaId ? `?m=${d.mediaId}` : ''}` : d.slug ? `/album/${d.slug}` : null
   if (n.kind.startsWith('buddy.')) return '/me/buddies'
   if (n.kind === 'album.shared' && d.slug) return `/album/${d.slug}`
   return null

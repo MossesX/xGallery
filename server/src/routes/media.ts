@@ -5,7 +5,7 @@ import path from 'node:path'
 import { randomBytes } from 'node:crypto'
 import { pipeline } from 'node:stream/promises'
 import { db, MEDIA_DIR, now } from '../db.js'
-import { requirePerm, requireUser } from '../auth.js'
+import { requirePerm, requireUser, type User } from '../auth.js'
 import { HttpError, num, parseJson, str, wrap, IdRow } from '../util.js'
 import { commentJson, mediaJson } from '../serialize.js'
 import { canManageGallery, canViewAlbum } from '../access.js'
@@ -296,7 +296,7 @@ mediaRouter.get(
     const comments = db
       .prepare('SELECT c.*, u.display_name, u.username, u.avatar_path FROM comments c LEFT JOIN users u ON u.id = c.user_id WHERE c.media_id = ? ORDER BY c.created_at')
       .all(row.id) as IdRow[]
-    res.json({ comments: comments.map(commentJson) })
+    res.json({ comments: visibleComments(req, comments, galleryOfMedia(row)).map(commentJson) })
   }),
 )
 
@@ -309,12 +309,41 @@ mediaRouter.post(
     if (!canView(req, row)) throw new HttpError(404, 'Media not found')
     const body = str(req.body?.body, 2000)
     if (!body) throw new HttpError(400, 'Comment cannot be empty')
-    const info = db.prepare('INSERT INTO comments(user_id, media_id, body, created_at) VALUES (?, ?, ?, ?)').run(req.user!.id, row.id, body, now())
+    const held = getPolicy().moderateComments && !canManageGallery(req.user, galleryOfMedia(row) ?? -1)
+    const info = db.prepare('INSERT INTO comments(user_id, media_id, body, created_at, approved) VALUES (?, ?, ?, ?, ?)').run(req.user!.id, row.id, body, now(), held ? 0 : 1)
     const c = db.prepare('SELECT c.*, u.display_name, u.username, u.avatar_path FROM comments c JOIN users u ON u.id = c.user_id WHERE c.id = ?').get(info.lastInsertRowid as number) as IdRow
-    track(req, 'comment.media', { targetType: 'media', targetId: row.id as number, targetLabel: String(row.title ?? ''), detail: { body: String(c.body ?? '').slice(0, 140) } })
+    track(req, 'comment.media', { targetType: 'media', targetId: row.id as number, targetLabel: String(row.title ?? ''), detail: { body: String(c.body ?? '').slice(0, 140), held } })
     const ownerRow = db.prepare('SELECT g.owner_user_id o, a.slug s FROM albums a JOIN galleries g ON g.id = a.gallery_id WHERE a.id = ?').get(row.album_id as number) as { o: number; s: string } | undefined
-    if (ownerRow && ownerRow.o !== req.user!.id) notify({ userId: ownerRow.o, kind: 'comment.media', title: `${req.user!.display_name} commented on “${row.title}”`, body: String(c.body ?? '').slice(0, 200), actorId: req.user!.id, data: { mediaId: row.id, albumSlug: ownerRow.s } })
-    res.status(201).json({ comment: commentJson(c) })
+    if (ownerRow && ownerRow.o !== req.user!.id)
+      notify({ userId: ownerRow.o, kind: held ? 'comment.pending' : 'comment.media', title: held ? `${req.user!.display_name} left a comment on “${row.title}” that needs your approval` : `${req.user!.display_name} commented on “${row.title}”`, body: String(c.body ?? '').slice(0, 200), actorId: req.user!.id, data: { mediaId: row.id, albumSlug: ownerRow.s, commentId: c.id } })
+    res.status(201).json({ comment: commentJson(c), held })
+  }),
+)
+
+/** Which comments a viewer sees: approved ones, their own, and (for the album's managers) everything. */
+export function visibleComments(req: { user?: User }, rows: IdRow[], galleryId: number | null | undefined): IdRow[] {
+  const manages = galleryId != null && canManageGallery(req.user, galleryId)
+  return rows.filter((c) => c.approved !== 0 || manages || c.user_id === req.user?.id)
+}
+
+function galleryOfMedia(row: IdRow): number | null {
+  return (db.prepare('SELECT gallery_id FROM albums WHERE id = ?').get(row.album_id as number) as { gallery_id: number } | undefined)?.gallery_id ?? null
+}
+
+/** Album managers approve a held comment. */
+mediaRouter.post(
+  '/comments/:id/approve',
+  requireUser,
+  wrap((req, res) => {
+    const c = db.prepare('SELECT * FROM comments WHERE id = ?').get(Number(req.params.id)) as IdRow | undefined
+    if (!c) throw new HttpError(404, 'Comment not found')
+    const albumId = (c.album_id as number | null) ?? (db.prepare('SELECT album_id FROM media WHERE id = ?').get(c.media_id as number) as { album_id: number } | undefined)?.album_id
+    const galleryId = albumId ? (db.prepare('SELECT gallery_id FROM albums WHERE id = ?').get(albumId) as { gallery_id: number } | undefined)?.gallery_id : undefined
+    if (galleryId == null || !canManageGallery(req.user, galleryId)) throw new HttpError(403, 'Only the album owner can approve comments')
+    db.prepare('UPDATE comments SET approved = 1 WHERE id = ?').run(c.id)
+    track(req, 'comment.approve', { targetType: 'comment', targetId: c.id as number, detail: { body: String(c.body ?? '').slice(0, 140) } })
+    const full = db.prepare('SELECT c.*, u.display_name, u.username, u.avatar_path FROM comments c LEFT JOIN users u ON u.id = c.user_id WHERE c.id = ?').get(c.id) as IdRow
+    res.json({ comment: commentJson(full) })
   }),
 )
 

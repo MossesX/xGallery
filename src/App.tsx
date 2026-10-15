@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import type React from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom'
 import { ThemeProvider } from './components/ThemeProvider'
 import { AppShell } from './components/AppShell'
@@ -12,7 +13,7 @@ import { GalleryPage } from './pages/GalleryPage'
 import { PublicAlbumPage, PublicDirectoryPage, PublicGalleryPage } from './pages/PublicGalleryPage'
 import { GalleriesPage } from './pages/GalleriesPage'
 import { PublicHomePage } from './pages/PublicHomePage'
-import { useMe } from './api/hooks'
+import { useMe, useSettings } from './api/hooks'
 import { PageLoader } from './components/Skeleton'
 import { GallerySettingsPage } from './pages/admin/GallerySettingsPage'
 import { AdminLayout } from './pages/admin/AdminLayout'
@@ -57,9 +58,20 @@ function AlbumEditorRedirect() {
 }
 
 /** The root: anonymous visitors browse public albums; members get their home. */
+/** When the owner closes public browsing, visitors are sent to sign in instead of the public pages. */
+function BrowsingGate({ children }: { children: React.ReactNode }) {
+  const { data: user, isLoading } = useMe()
+  const { data: site, isLoading: siteLoading } = useSettings()
+  if (isLoading || siteLoading) return <PageLoader />
+  if (!user && site?.policy && !site.policy.publicBrowsing) return <Navigate to="/login" replace />
+  return <>{children}</>
+}
+
 function Root() {
   const { data: user, isLoading } = useMe()
-  if (isLoading) return <PageLoader />
+  const { data: site, isLoading: siteLoading } = useSettings()
+  if (isLoading || siteLoading) return <PageLoader />
+  if (!user && site?.policy && !site.policy.publicBrowsing) return <Navigate to="/login" replace />
   if (!user) return <PublicHomePage />
   if (user.mustChangePassword) return <Navigate to="/change-password" replace />
   return (
@@ -82,9 +94,9 @@ export default function App() {
             <Route path="/change-password" element={<ChangePasswordPage />} />
             <Route path="/contact" element={<RequestAccountPage />} />
             <Route path="/s/:token" element={<SharePage />} />
-            <Route path="/public" element={<PublicDirectoryPage />} />
-            <Route path="/public/:slug" element={<PublicGalleryPage />} />
-            <Route path="/public/:slug/:album" element={<PublicAlbumPage />} />
+            <Route path="/public" element={<BrowsingGate><PublicDirectoryPage /></BrowsingGate>} />
+            <Route path="/public/:slug" element={<BrowsingGate><PublicGalleryPage /></BrowsingGate>} />
+            <Route path="/public/:slug/:album" element={<BrowsingGate><PublicAlbumPage /></BrowsingGate>} />
             <Route element={<RequireAuth />}>
               <Route element={<AppShell />}>
                 <Route path="/album/:slug" element={<AlbumPage />} />

@@ -5,6 +5,7 @@ import { attachUser, pruneSessions } from './auth.js'
 import { ensureSeeded } from './seed.js'
 import { removeDemoCommunity, seedDemoCommunity } from './demo.js'
 import { HttpError } from './util.js'
+import { getPolicy } from './policy.js'
 import { authRouter } from './routes/auth.js'
 import { usersRouter } from './routes/users.js'
 import { albumsRouter, shareRouter } from './routes/albums.js'
@@ -53,6 +54,14 @@ app.use('/api', (req, res, next) => {
 app.get('/healthz', (_req, res) => res.type('text').send('ok'))
 
 app.use('/api', attachUser)
+// Site switch: when visitors may not browse, anonymous reads of galleries, albums and media are refused.
+// Sign-in, the shell's settings, account/contact requests, themes and private share links stay open.
+app.use('/api', (req, res, next) => {
+  if (req.user || getPolicy().publicBrowsing) return next()
+  const open = req.path.startsWith('/auth') || req.path.startsWith('/settings') || req.path.startsWith('/inbox') || req.path.startsWith('/share') || req.path.startsWith('/themes') || (req.path.startsWith('/media/') && req.query.s != null)
+  if (open) return next()
+  res.status(401).json({ error: 'Sign in to browse this site', code: 'login_required' })
+})
 app.use('/api', express.json({ limit: '1mb' }))
 app.use('/api/auth', authRouter)
 app.use('/api/users', usersRouter)

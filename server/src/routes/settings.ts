@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { db, getSetting, setSetting } from '../db.js'
 import { requireAdmin, requireOwner } from '../auth.js'
 import { isOwner, managedGalleryIds } from '../access.js'
+import { getPolicy } from '../policy.js'
 import { DEFAULT_SETTINGS } from '../brand.js'
 import { bool, num, str, wrap, IdRow } from '../util.js'
 
@@ -17,8 +18,10 @@ settingsRouter.get(
   wrap((_req, res) => {
     const s = current()
     const theme = s.activeThemeId ? (db.prepare('SELECT * FROM themes WHERE id = ?').get(s.activeThemeId) as IdRow | undefined) : undefined
+    const policy = getPolicy()
     res.json({
       settings: s,
+      policy: { publicBrowsing: policy.publicBrowsing, acceptRequests: policy.acceptRequests },
       theme: theme
         ? { id: theme.id, name: theme.name, light: JSON.parse(theme.light as string), dark: JSON.parse(theme.dark as string), fontDisplay: theme.font_display, fontBody: theme.font_body, radius: theme.radius, scale: theme.scale, builtIn: !!theme.built_in, createdAt: theme.created_at }
         : null,

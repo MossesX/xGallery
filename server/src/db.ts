@@ -183,6 +183,8 @@ if (!hasColumn('users', 'limits')) db.exec("ALTER TABLE users ADD COLUMN limits 
 if (!hasColumn('users', 'must_change_password')) db.exec('ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0')
 if (!hasColumn('users', 'email')) db.exec("ALTER TABLE users ADD COLUMN email TEXT NOT NULL DEFAULT ''")
 if (!hasColumn('users', 'phone')) db.exec("ALTER TABLE users ADD COLUMN phone TEXT NOT NULL DEFAULT ''")
+// Comment moderation: held comments wait for the album owner's approval.
+if (!hasColumn('comments', 'approved')) db.exec('ALTER TABLE comments ADD COLUMN approved INTEGER NOT NULL DEFAULT 1')
 if (!hasColumn('galleries', 'is_primary')) {
   // Drop the one-gallery-per-owner constraint by rebuilding the table.
   db.exec(`

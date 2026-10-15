@@ -210,6 +210,11 @@ export interface LayoutConfig {
   heroCover: boolean
 }
 
+export interface PublicPolicy {
+  publicBrowsing: boolean
+  acceptRequests: boolean
+}
+
 export interface SiteSettings {
   siteTitle: string
   tagline: string
@@ -321,6 +326,7 @@ export interface Comment {
   albumId: number | null
   body: string
   createdAt: number
+  approved: boolean
   author: { id: number; displayName: string; username: string; avatarUrl: string | null }
 }
 

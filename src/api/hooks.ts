@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
-import type { ActivityPage, ActivityPartition, AlbumLink, AiConversation, Group, NewAlbumEntry, Notification, SitePolicy, TimelineItem, TreeUser, AiMessage, AiSettingsView, AiStatus, Album, BuddyLists, Comment, Conversation, Gallery, InboxItem, MediaItem, Message, Person, PublicFeed, Session, SiteSettings, Stats, Theme, ThemeDraft, Unread, User } from './types'
+import type { ActivityPage, ActivityPartition, AlbumLink, AiConversation, Group, NewAlbumEntry, Notification, SitePolicy, TimelineItem, TreeUser, AiMessage, AiSettingsView, AiStatus, Album, BuddyLists, Comment, Conversation, Gallery, InboxItem, MediaItem, Message, Person, PublicFeed, Session, SiteSettings, Stats, Theme, ThemeDraft, Unread, User, PublicPolicy } from './types'
 
 export const keys = {
   me: ['me'] as const,
@@ -28,7 +28,7 @@ export function useSession(enabled = true) {
 }
 
 export function useSettings() {
-  return useQuery({ queryKey: keys.settings, queryFn: () => api.get<{ settings: SiteSettings; theme: Theme | null }>('/api/settings'), staleTime: 60_000 })
+  return useQuery({ queryKey: keys.settings, queryFn: () => api.get<{ settings: SiteSettings; policy?: PublicPolicy; theme: Theme | null }>('/api/settings'), staleTime: 60_000 })
 }
 
 export function useAlbums(params: { q?: string; tag?: string; sort?: string; gallery?: string; mine?: string } = {}) {

@@ -51,7 +51,7 @@ export function LoginPage() {
             {login.isPending ? 'Signing in…' : 'Sign in'}
           </button>
           <p className="muted small" style={{ margin: 0 }}>
-            No account? <Link to="/request-account">Request one from the owner</Link>, or <Link to="/">browse public albums</Link>. <Link to="/forgot-password">Forgot your password?</Link>
+            No account? {data?.policy?.acceptRequests === false ? 'The owner is not taking requests right now.' : <><Link to="/request-account">Request one from the owner</Link>{data?.policy?.publicBrowsing === false ? '' : <>, or <Link to="/">browse public albums</Link></>}.</>} <Link to="/forgot-password">Forgot your password?</Link>
           </p>
         </form>
       </main>

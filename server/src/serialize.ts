@@ -47,7 +47,7 @@ export function albumJson(row: Record<string, unknown>, userId?: number, opts: {
   const id = row.id as number
   const counts = db.prepare('SELECT COUNT(*) c, COALESCE(SUM(kind = \'video\'), 0) v FROM media WHERE album_id = ?').get(id) as { c: number; v: number }
   const likes = (db.prepare('SELECT COUNT(*) c FROM likes l JOIN media m ON m.id = l.media_id WHERE m.album_id = ?').get(id) as { c: number }).c
-  const comments = (db.prepare('SELECT COUNT(*) c FROM comments WHERE album_id = ? OR media_id IN (SELECT id FROM media WHERE album_id = ?)').get(id, id) as { c: number }).c
+  const comments = (db.prepare('SELECT COUNT(*) c FROM comments WHERE approved = 1 AND (album_id = ? OR media_id IN (SELECT id FROM media WHERE album_id = ?))').get(id, id) as { c: number }).c
   const favorites = (db.prepare('SELECT COUNT(*) c FROM favorites WHERE album_id = ?').get(id) as { c: number }).c
   let cover = row.cover_media_id ? (db.prepare('SELECT * FROM media WHERE id = ? AND album_id = ?').get(row.cover_media_id as number, id) as Record<string, unknown> | undefined) : undefined
   if (!cover) cover = db.prepare('SELECT * FROM media WHERE album_id = ? ORDER BY sort_order LIMIT 1').get(id) as Record<string, unknown> | undefined
@@ -85,7 +85,7 @@ export function albumJson(row: Record<string, unknown>, userId?: number, opts: {
 export function mediaJson(row: Record<string, unknown>, userId?: number, urlSuffix = '') {
   const id = row.id as number
   const likes = (db.prepare('SELECT COUNT(*) c FROM likes WHERE media_id = ?').get(id) as { c: number }).c
-  const comments = (db.prepare('SELECT COUNT(*) c FROM comments WHERE media_id = ?').get(id) as { c: number }).c
+  const comments = (db.prepare('SELECT COUNT(*) c FROM comments WHERE approved = 1 AND media_id = ?').get(id) as { c: number }).c
   const liked = userId != null ? !!db.prepare('SELECT 1 FROM likes WHERE user_id = ? AND media_id = ?').get(userId, id) : false
   const reactionRows = db.prepare('SELECT emoji, COUNT(*) c FROM reactions WHERE media_id = ? GROUP BY emoji ORDER BY c DESC').all(id) as { emoji: string; c: number }[]
   const myReaction = userId != null ? ((db.prepare('SELECT emoji FROM reactions WHERE user_id = ? AND media_id = ?').get(userId, id) as { emoji: string } | undefined)?.emoji ?? null) : null
@@ -121,6 +121,7 @@ export function commentJson(row: Record<string, unknown>) {
     albumId: row.album_id ?? null,
     body: row.body,
     createdAt: row.created_at,
+    approved: row.approved !== 0,
     author: { id: row.user_id, displayName: row.display_name ?? 'Removed user', username: row.username ?? '', avatarUrl: avatarUrlFor(row.user_id as number, row.avatar_path) },
   }
 }
