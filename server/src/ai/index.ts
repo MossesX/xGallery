@@ -5,6 +5,7 @@ import { cliAvailable, runCli } from './cli.js'
 import { runApi } from './api.js'
 import { codebaseOverview, ensureWorkspace, SOURCE_DIR, sourceVersion } from './workspace.js'
 import { DEFAULT_AI, type AiSettings, type RunResult, type StreamEvent } from './types.js'
+import { checkpoint, headSha, recordAiFileChanges, recordEvent } from '../dev.js'
 
 export const MASK = '••••••••'
 
@@ -129,6 +130,22 @@ export interface PageContext {
   element?: string
 }
 
+/** The developer panel's assistant: same backends, full write access to the workspace, every change checkpointed and logged. */
+export function buildDevSystemPrompt(user: User, cwd: string): string {
+  const s = getAiSettings()
+  const site = getSetting<Record<string, unknown>>('site', {})
+  return [
+    `You are ${s.assistantName} in DEVELOPER mode: the integrated Claude Code developer of ${site.siteTitle ?? 'xGallery'} (a social photo and video gallery web app by ${site.brandName ?? 'AmberX'}, Vite + React 19 + TypeScript client in src/, Node + Express 5 + SQLite server in server/src/). You are working with the site owner, ${user.display_name}, inside the owner's developer panel.`,
+    `Your working directory ${cwd} is a writable git workspace copied from source snapshot ${sourceVersion()}. You have full access: read, search, create, edit and delete files. The panel takes a git checkpoint before every turn and logs every file you change, so work decisively; the owner can restore any checkpoint with one click, review the diff, and export a patch to deploy. Nothing you do here touches the running site until the owner deploys it.`,
+    'Working style: understand the relevant code before changing it (read files, search), keep changes minimal and consistent with the existing style, keep the server and client types in sync, and finish every change you start. End each turn with a short "Changes" list: file paths and what changed, plus anything the owner must do (install a dependency, run a migration, rebuild). If a request is unclear, make a sensible choice and say what you assumed.',
+    'Never write secrets into files, never touch the data directory, and never run destructive shell commands.',
+    s.extraInstructions.trim() ? `Owner instructions:\n${s.extraInstructions.trim()}` : '',
+    `\n${codebaseOverview(cwd)}`,
+  ]
+    .filter(Boolean)
+    .join('\n\n')
+}
+
 export function buildSystemPrompt(user: User, ctx: PageContext | undefined, allowCode: boolean, cwd: string): string {
   const s = getAiSettings()
   const site = getSetting<Record<string, unknown>>('site', {})
@@ -161,16 +178,24 @@ export interface AssistantTurn {
   context?: PageContext
   onEvent: (e: StreamEvent) => void
   signal?: AbortSignal
+  /** Developer-panel turn: full write access to the workspace, checkpointed and logged on this session. */
+  dev?: { sessionId: number }
 }
 
 /** Run one assistant turn: subscription backend first, API fallback, persisting both sides. */
 export async function assistantTurn(t: AssistantTurn): Promise<{ result: RunResult; messageId: number }> {
   const s = getAiSettings()
-  const conv = db.prepare('SELECT * FROM ai_conversations WHERE id = ? AND user_id = ?').get(t.conversationId, t.user.id) as { id: number; cli_session_id: string | null; title: string } | undefined
+  const conv = db.prepare('SELECT * FROM ai_conversations WHERE id = ? AND user_id = ?').get(t.conversationId, t.user.id) as { id: number; cli_session_id: string | null; title: string; mode: string } | undefined
   if (!conv) throw new Error('Conversation not found')
-  const allowCode = s.allowCodeChanges && t.user.role === 'owner'
+  const dev = t.dev && conv.mode === 'dev' && t.user.role === 'owner' ? t.dev : null
+  const allowCode = !!dev || (s.allowCodeChanges && t.user.role === 'owner')
   const cwd = allowCode ? ensureWorkspace() : SOURCE_DIR
-  const system = buildSystemPrompt(t.user, t.context, allowCode, cwd)
+  const system = dev ? buildDevSystemPrompt(t.user, cwd) : buildSystemPrompt(t.user, t.context, allowCode, cwd)
+  let beforeSha = ''
+  if (dev) {
+    checkpoint(`Before AI turn: ${t.prompt.replace(/\s+/g, ' ').slice(0, 80)}`, dev.sessionId)
+    beforeSha = headSha()
+  }
   const history = (db.prepare('SELECT role, content FROM ai_messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 40').all(conv.id) as { role: 'user' | 'assistant'; content: string }[]).reverse()
   const ts = now()
   db.prepare("INSERT INTO ai_messages(conversation_id, role, content, meta, created_at) VALUES (?, 'user', ?, ?, ?)").run(conv.id, t.prompt, JSON.stringify({ context: t.context ?? null }), ts)
@@ -194,10 +219,17 @@ export async function assistantTurn(t: AssistantTurn): Promise<{ result: RunResu
     result = await runApi(base, t.onEvent)
   }
   if (!result) throw lastError ?? new Error('The assistant is not configured yet: the owner must add a Claude subscription token or an API key in Admin → Assistant.')
+  // Developer turns: log every file the model changed (and checkpoint) before the reply is stored, so the message carries the list.
+  const devFiles = dev ? recordAiFileChanges(dev.sessionId, beforeSha, t.prompt) : []
+  if (dev) result.toolsUsed.push(...devFiles.map((f) => `changed:${f.path}`))
   const info = db
     .prepare("INSERT INTO ai_messages(conversation_id, role, content, meta, created_at) VALUES (?, 'assistant', ?, ?, ?)")
     .run(conv.id, result.text, JSON.stringify({ backend: result.backend, tools: result.toolsUsed.slice(0, 50), model: s.model }), now())
   db.prepare('UPDATE ai_conversations SET updated_at = ? WHERE id = ?').run(now(), conv.id)
-  logActivity({ userId: t.user.id, kind: 'ai.turn', targetType: 'conversation', targetId: conv.id, targetLabel: conv.title, detail: { backend: result.backend, tools: result.toolsUsed.length, codeChanges: allowCode, prompt: t.prompt.slice(0, 120) } })
+  logActivity({ userId: t.user.id, kind: dev ? 'dev.ai_turn' : 'ai.turn', targetType: 'conversation', targetId: conv.id, targetLabel: conv.title, detail: { backend: result.backend, tools: result.toolsUsed.length, codeChanges: allowCode, prompt: t.prompt.slice(0, 120) } })
+  if (dev) {
+    const tools = result.toolsUsed.filter((x) => !x.startsWith('changed:')).length
+    recordEvent(dev.sessionId, 'ai.turn', { detail: { conversationId: conv.id, backend: result.backend, tools, files: devFiles.map((f) => f.path).slice(0, 50), messageId: info.lastInsertRowid }, summary: `“${t.prompt.replace(/\s+/g, ' ').slice(0, 120)}” → ${devFiles.length} file${devFiles.length === 1 ? '' : 's'} changed (${result.backend}, ${tools} tool calls)` })
+  }
   return { result, messageId: info.lastInsertRowid as number }
 }

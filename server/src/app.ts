@@ -19,6 +19,8 @@ import { inboxRouter } from './routes/inbox.js'
 import { activityRouter } from './routes/activity.js'
 import { policyRouter } from './routes/policy.js'
 import { notificationsRouter } from './routes/notifications.js'
+import { devRouter } from './routes/dev.js'
+import { attachDev, sweepDevSessions } from './dev.js'
 import { adminRouter } from './routes/admin.js'
 
 ensureSeeded()
@@ -27,6 +29,7 @@ if (process.env.XG_DEMO === '1') seedDemoCommunity()
 else removeDemoCommunity()
 pruneSessions()
 setInterval(pruneSessions, 6 * 3600 * 1000).unref()
+setInterval(sweepDevSessions, 5 * 60 * 1000).unref()
 
 export const app = express()
 app.disable('x-powered-by')
@@ -54,6 +57,7 @@ app.use('/api', (req, res, next) => {
 app.get('/healthz', (_req, res) => res.type('text').send('ok'))
 
 app.use('/api', attachUser)
+app.use('/api', attachDev)
 // Site switch: when visitors may not browse, anonymous reads of galleries, albums and media are refused.
 // Sign-in, the shell's settings, account/contact requests, themes and private share links stay open.
 app.use('/api', (req, res, next) => {
@@ -76,6 +80,7 @@ app.use('/api/activity', activityRouter)
 app.use('/api/policy', policyRouter)
 app.use('/api/notifications', notificationsRouter)
 app.use('/api/admin', adminRouter)
+app.use('/api/dev', devRouter)
 app.use('/api/themes', themesRouter)
 app.use('/api/settings', settingsRouter)
 app.use('/api', mediaRouter)

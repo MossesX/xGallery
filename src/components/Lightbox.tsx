@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, Download, Info, Link2, Maximize2, Pause, Pla
 import type { MediaItem } from '../api/types'
 import { LikeButton } from './LikeButton'
 import { ReactionBar } from './ReactionBar'
+import { useUiConfig } from '../ui/config'
 import { Comments } from './Comments'
 import { formatBytes, formatDuration } from '../lib/media'
 import { api } from '../api/client'
@@ -27,6 +28,7 @@ interface Props {
  * a collapsible info and comments panel, zoom with drag-to-pan, slideshow and autoplay-next.
  */
 export function Lightbox({ items, index, onClose, onNavigate, allowComments, allowLikes, allowDownloads, readOnly, context }: Props) {
+  const ui = useUiConfig()
   const item = items[index]
   const [sideOpen, setSideOpen] = useState(() => window.innerWidth > 1100)
   const [zoom, setZoom] = useState(false)
@@ -233,11 +235,11 @@ export function Lightbox({ items, index, onClose, onNavigate, allowComments, all
           {item.description && <p className="muted" style={{ whiteSpace: 'pre-wrap' }}>{item.description}</p>}
           <div className="row" style={{ gap: 10 }}>
             {allowLikes && !readOnly && <LikeButton item={item} />}
-            {allowLikes && !readOnly && <ReactionBar item={item} compact />}
+            {allowLikes && ui.flags.reactions !== false && !readOnly && <ReactionBar item={item} compact />}
             <span className="muted small">{item.views} views</span>
           </div>
         </div>
-        {allowComments && !readOnly && (
+        {allowComments && ui.flags.comments !== false && !readOnly && (
           <div className="side-body">
             <div className="eyebrow muted" style={{ marginBottom: 12 }}>
               Comments

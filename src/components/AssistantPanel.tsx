@@ -9,7 +9,7 @@ import { useUI } from '../store/ui'
 import { Markdown } from './Markdown'
 import { Avatar } from './Avatar'
 
-interface LiveTurn {
+export interface LiveTurn {
   text: string
   status: string
   tools: { name: string; input: string }[]
@@ -17,7 +17,7 @@ interface LiveTurn {
 }
 
 /** Consume the server-sent event stream of one assistant turn. */
-async function streamTurn(conversationId: number, content: string, context: PageContext, onEvent: (event: string, data: Record<string, unknown>) => void, signal: AbortSignal): Promise<void> {
+export async function streamTurn(conversationId: number, content: string, context: PageContext, onEvent: (event: string, data: Record<string, unknown>) => void, signal: AbortSignal): Promise<void> {
   const res = await fetch(`/api/ai/conversations/${conversationId}/messages`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'xgallery' }, body: JSON.stringify({ content, context }), credentials: 'include', signal })
   if (!res.ok || !res.body) {
     let msg = `Request failed (${res.status})`
@@ -128,7 +128,7 @@ export function AssistantPanel() {
     setText('')
     setContext({})
     const optimistic: AiMessage = { id: -Date.now(), role: 'user', content, createdAt: Date.now(), meta: { context: ctx } }
-    qc.setQueryData<{ conversation: AiConversation; messages: AiMessage[] }>(['ai-conversation', id], (old) => (old ? { ...old, messages: [...old.messages, optimistic] } : { conversation: { id: id!, title: content.slice(0, 60), createdAt: Date.now(), updatedAt: Date.now(), messages: 1 }, messages: [optimistic] }))
+    qc.setQueryData<{ conversation: AiConversation; messages: AiMessage[] }>(['ai-conversation', id], (old) => (old ? { ...old, messages: [...old.messages, optimistic] } : { conversation: { id: id!, title: content.slice(0, 60), mode: 'assistant', createdAt: Date.now(), updatedAt: Date.now(), messages: 1 }, messages: [optimistic] }))
     const turn: LiveTurn = { text: '', status: 'Connecting…', tools: [], error: null }
     setLive({ ...turn })
     const ac = new AbortController()

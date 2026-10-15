@@ -1,12 +1,14 @@
 import { useState, type FormEvent } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useLogin, useMe, useSettings } from '../api/hooks'
+import { useUiConfig } from '../ui/config'
 import { PublicShell } from '../components/PublicShell'
 import { AmberMark } from '../brand/Logo'
 
 export function LoginPage() {
   const { data: user, isLoading } = useMe()
   const { data } = useSettings()
+  const ui = useUiConfig()
   const login = useLogin()
   const navigate = useNavigate()
   const location = useLocation()
@@ -51,7 +53,7 @@ export function LoginPage() {
             {login.isPending ? 'Signing in…' : 'Sign in'}
           </button>
           <p className="muted small" style={{ margin: 0 }}>
-            No account? {data?.policy?.acceptRequests === false ? 'The owner is not taking requests right now.' : <><Link to="/request-account">Request one from the owner</Link>{data?.policy?.publicBrowsing === false ? '' : <>, or <Link to="/">browse public albums</Link></>}.</>} <Link to="/forgot-password">Forgot your password?</Link>
+            No account? {data?.policy?.acceptRequests === false ? 'The owner is not taking requests right now.' : <><Link to="/request-account">Request one from the owner</Link>{data?.policy?.publicBrowsing === false ? '' : <>, or <Link to="/">browse public albums</Link></>}.</>} {ui.flags.forgotPassword !== false && <Link to="/forgot-password">Forgot your password?</Link>}
           </p>
         </form>
       </main>

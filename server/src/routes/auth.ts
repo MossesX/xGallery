@@ -5,6 +5,7 @@ import { HttpError, str, wrap, IdRow } from '../util.js'
 import { track, logActivity } from '../activity.js'
 import { notifyOwner } from '../notifications.js'
 import { getPolicy } from '../policy.js'
+import { endSessionsForLogin } from '../dev.js'
 
 export const authRouter = Router()
 
@@ -45,7 +46,10 @@ authRouter.post(
   '/logout',
   wrap((req, res) => {
     if (req.user) track(req, 'auth.logout')
-    if (req.sessionToken) destroySession(req.sessionToken)
+    if (req.sessionToken) {
+      endSessionsForLogin(req.sessionToken, 'signout')
+      destroySession(req.sessionToken)
+    }
     setSessionCookie(res, null, null)
     res.json({ ok: true })
   }),

@@ -315,3 +315,42 @@ CREATE INDEX IF NOT EXISTS messages_pair ON messages(from_id, to_id, created_at)
 if (!hasColumn('albums', 'gallery_id')) db.exec('ALTER TABLE albums ADD COLUMN gallery_id INTEGER')
 if (!hasColumn('albums', 'restricted')) db.exec('ALTER TABLE albums ADD COLUMN restricted INTEGER NOT NULL DEFAULT 0')
 db.exec('CREATE INDEX IF NOT EXISTS albums_gallery ON albums(gallery_id)')
+
+// v7: the developer panel — password-gated sessions with a change log, site-design snapshots,
+// and developer-mode AI conversations.
+if (!hasColumn('ai_conversations', 'mode')) db.exec("ALTER TABLE ai_conversations ADD COLUMN mode TEXT NOT NULL DEFAULT 'assistant'")
+db.exec(`
+CREATE TABLE IF NOT EXISTS dev_sessions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  login_token TEXT NOT NULL,
+  started_at INTEGER NOT NULL,
+  last_active_at INTEGER NOT NULL,
+  ended_at INTEGER,
+  end_reason TEXT NOT NULL DEFAULT '',
+  ip TEXT NOT NULL DEFAULT '',
+  user_agent TEXT NOT NULL DEFAULT '',
+  summary TEXT NOT NULL DEFAULT '',
+  summary_source TEXT NOT NULL DEFAULT '',
+  changes INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS dev_sessions_token ON dev_sessions(login_token, ended_at);
+CREATE TABLE IF NOT EXISTS dev_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id INTEGER NOT NULL REFERENCES dev_sessions(id) ON DELETE CASCADE,
+  ts INTEGER NOT NULL,
+  kind TEXT NOT NULL,
+  path TEXT NOT NULL DEFAULT '',
+  detail TEXT NOT NULL DEFAULT '{}',
+  summary TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS dev_events_session ON dev_events(session_id, id);
+CREATE TABLE IF NOT EXISTS dev_snapshots (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id INTEGER REFERENCES dev_sessions(id) ON DELETE SET NULL,
+  created_at INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'auto',
+  payload TEXT NOT NULL
+);
+`)

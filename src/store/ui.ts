@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { ColorMode } from '../theme/apply'
 import type { PageContext, ThemeDraft } from '../api/types'
+import type { UiConfig } from '../api/dev'
 
 interface UIState {
   colorMode: ColorMode
@@ -20,6 +21,11 @@ interface UIState {
   closeAssistant: () => void
   setAssistantConversation: (id: number | null) => void
   clearAssistantDraft: () => void
+  /** Developer panel: a draft of the site design applied live while editing, and design mode (edit handles on the page). */
+  previewUi: Partial<UiConfig> | null
+  setPreviewUi: (u: Partial<UiConfig> | null) => void
+  designMode: boolean
+  setDesignMode: (on: boolean) => void
   toast: { id: number; message: string; tone: 'info' | 'error' | 'success' } | null
   notify: (message: string, tone?: 'info' | 'error' | 'success') => void
   dismissToast: () => void
@@ -46,6 +52,10 @@ export const useUI = create<UIState>()(
       closeAssistant: () => set({ assistantOpen: false }),
       setAssistantConversation: (assistantConversationId) => set({ assistantConversationId }),
       clearAssistantDraft: () => set({ assistantDraft: null }),
+      previewUi: null,
+      setPreviewUi: (previewUi) => set({ previewUi }),
+      designMode: false,
+      setDesignMode: (designMode) => set({ designMode }),
       toast: null,
       notify: (message, tone = 'info') => set({ toast: { id: Date.now(), message, tone } }),
       dismissToast: () => set({ toast: null }),

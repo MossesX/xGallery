@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { Banner, Footer } from './Banner'
+import { CustomStyles } from '../ui/config'
 import { Toast } from './Toast'
 
 /** Chrome for login-free pages: the same AmberX banner, with sign-in instead of the account controls. */
@@ -10,6 +11,7 @@ export function PublicShell({ children }: { children: ReactNode }) {
       {children}
       <Footer />
       <Toast />
+      <CustomStyles />
     </div>
   )
 }

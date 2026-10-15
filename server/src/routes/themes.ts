@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { devEvent, takeSnapshot } from '../dev.js'
 import { db, now } from '../db.js'
 import { requireOwner, requireUser } from '../auth.js'
 import { HttpError, num, str, wrap, parseJson, IdRow } from '../util.js'
@@ -46,9 +47,11 @@ themesRouter.post(
   requireOwner,
   wrap((req, res) => {
     const b = req.body ?? {}
+    if (req.devSession) takeSnapshot(req.devSession.id, `Before creating theme “${str(b.name, 60) || 'Untitled theme'}”`)
     const info = db
       .prepare('INSERT INTO themes(name, light, dark, font_display, font_body, radius, scale, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
       .run(str(b.name, 60) || 'Untitled theme', JSON.stringify(validPalette(b.light)), JSON.stringify(validPalette(b.dark)), str(b.fontDisplay, 60) || 'Sora', str(b.fontBody, 60) || 'Inter', num(b.radius, 12), num(b.scale, 1), now())
+    devEvent(req, 'theme.save', { path: `themes/${info.lastInsertRowid}`, summary: `Theme “${str(b.name, 60) || 'Untitled theme'}” created`, detail: { id: info.lastInsertRowid } })
     res.status(201).json({ theme: themeJson(db.prepare('SELECT * FROM themes WHERE id = ?').get(info.lastInsertRowid as number) as IdRow) })
   }),
 )
@@ -61,6 +64,7 @@ themesRouter.put(
     const row = db.prepare('SELECT * FROM themes WHERE id = ?').get(id) as IdRow | undefined
     if (!row) throw new HttpError(404, 'Theme not found')
     const b = req.body ?? {}
+    if (req.devSession) takeSnapshot(req.devSession.id, `Before editing theme “${row.name as string}”`)
     db.prepare('UPDATE themes SET name = ?, light = ?, dark = ?, font_display = ?, font_body = ?, radius = ?, scale = ? WHERE id = ?').run(
       str(b.name, 60) || (row.name as string),
       JSON.stringify(validPalette(b.light ?? parseJson(row.light, {}))),
@@ -71,6 +75,7 @@ themesRouter.put(
       num(b.scale, row.scale as number),
       id,
     )
+    devEvent(req, 'theme.save', { path: `themes/${id}`, summary: `Theme “${str(b.name, 60) || (row.name as string)}” edited`, detail: { id } })
     res.json({ theme: themeJson(db.prepare('SELECT * FROM themes WHERE id = ?').get(id) as IdRow) })
   }),
 )
@@ -82,7 +87,10 @@ themesRouter.delete(
     const id = Number(req.params.id)
     const active = (db.prepare('SELECT value FROM settings WHERE key = ?').get('site') as { value: string } | undefined)?.value
     if (active && (JSON.parse(active) as { activeThemeId?: number }).activeThemeId === id) throw new HttpError(400, 'Deactivate this theme before deleting it')
+    const row = db.prepare('SELECT name FROM themes WHERE id = ?').get(id) as { name: string } | undefined
+    if (req.devSession) takeSnapshot(req.devSession.id, `Before deleting theme “${row?.name ?? id}”`)
     db.prepare('DELETE FROM themes WHERE id = ?').run(id)
+    devEvent(req, 'theme.delete', { path: `themes/${id}`, summary: `Theme “${row?.name ?? id}” deleted`, detail: { id } })
     res.json({ ok: true })
   }),
 )

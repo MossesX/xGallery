@@ -424,6 +424,7 @@ export interface AiSettingsView {
 export interface AiConversation {
   id: number
   title: string
+  mode: 'assistant' | 'dev'
   createdAt: number
   updatedAt: number
   messages: number

@@ -4,6 +4,8 @@ import { Banner, Footer } from './Banner'
 import { Toast } from './Toast'
 import { AssistantPanel } from './AssistantPanel'
 import { ContextMenu } from './ContextMenu'
+import { DesignMode } from './DesignMode'
+import { CustomStyles } from '../ui/config'
 
 export function AppShell({ children }: { children?: ReactNode }) {
   return (
@@ -14,6 +16,8 @@ export function AppShell({ children }: { children?: ReactNode }) {
       <Toast />
       <AssistantPanel />
       <ContextMenu />
+      <DesignMode />
+      <CustomStyles />
     </div>
   )
 }

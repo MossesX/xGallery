@@ -14,6 +14,14 @@ import { PublicAlbumPage, PublicDirectoryPage, PublicGalleryPage } from './pages
 import { GalleriesPage } from './pages/GalleriesPage'
 import { PublicHomePage } from './pages/PublicHomePage'
 import { useMe, useSettings } from './api/hooks'
+import { DevLayout } from './pages/dev/DevLayout'
+import { DevOverviewPage } from './pages/dev/DevOverviewPage'
+import { DevAssistantPage } from './pages/dev/DevAssistantPage'
+import { DevCodePage } from './pages/dev/DevCodePage'
+import { DevRestorePage } from './pages/dev/DevRestorePage'
+import { DevSessionsPage } from './pages/dev/DevSessionsPage'
+import { DevSettingsPage } from './pages/dev/DevSettingsPage'
+import { DevContextMenuPage, DevCssPage, DevFeaturesPage, DevFooterPage, DevHomePage, DevLayoutPage, DevNavigationPage, DevToolbarPage } from './pages/dev/DevDesignPages'
 import { PageLoader } from './components/Skeleton'
 import { GallerySettingsPage } from './pages/admin/GallerySettingsPage'
 import { AdminLayout } from './pages/admin/AdminLayout'
@@ -116,6 +124,24 @@ export default function App() {
                   <Route path="messages" element={<MessagesPage />} />
                   <Route path="messages/:id" element={<MessagesPage />} />
                 </Route>
+                <Route path="/dev" element={<DevLayout />}>
+                  <Route index element={<DevOverviewPage />} />
+                  <Route path="assistant" element={<DevAssistantPage />} />
+                  <Route path="code" element={<DevCodePage />} />
+                  <Route path="restore" element={<DevRestorePage />} />
+                  <Route path="sessions" element={<DevSessionsPage />} />
+                  <Route path="settings" element={<DevSettingsPage />} />
+                  <Route path="themes" element={<ThemesPage />} />
+                  <Route path="appearance" element={<AppearancePage />} />
+                  <Route path="navigation" element={<DevNavigationPage />} />
+                  <Route path="toolbar" element={<DevToolbarPage />} />
+                  <Route path="footer" element={<DevFooterPage />} />
+                  <Route path="home" element={<DevHomePage />} />
+                  <Route path="context-menu" element={<DevContextMenuPage />} />
+                  <Route path="layout" element={<DevLayoutPage />} />
+                  <Route path="css" element={<DevCssPage />} />
+                  <Route path="features" element={<DevFeaturesPage />} />
+                </Route>
                 <Route element={<RequireAuth role="admin" />}>
                   <Route path="/admin" element={<AdminLayout />}>
                     <Route index element={<DashboardPage />} />
@@ -123,8 +149,8 @@ export default function App() {
                     <Route path="users" element={<UsersPage />} />
                     <Route path="albums" element={<Navigate to="/me/albums" replace />} />
                     <Route path="albums/:id" element={<AlbumEditorRedirect />} />
-                    <Route path="themes" element={<ThemesPage />} />
-                    <Route path="appearance" element={<AppearancePage />} />
+                    <Route path="themes" element={<Navigate to="/dev/themes" replace />} />
+                    <Route path="appearance" element={<Navigate to="/dev/appearance" replace />} />
                     <Route element={<RequireAuth role="owner" />}>
                       <Route path="assistant" element={<AssistantSettingsPage />} />
                       <Route path="inbox" element={<InboxPage />} />

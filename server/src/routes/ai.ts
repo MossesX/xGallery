@@ -6,6 +6,7 @@ import { HttpError, str, wrap, IdRow } from '../util.js'
 import { aiStatus, assistantTurn, getAiSettings, publicAiSettings, recordVerification, saveAiSettings, type PageContext } from '../ai/index.js'
 import { cliAvailable, pingCli } from '../ai/cli.js'
 import { ensureWorkspace, resetWorkspace, sourceVersion, workspaceDiff } from '../ai/workspace.js'
+import { requireDev } from '../dev.js'
 
 export const aiRouter = Router()
 
@@ -76,7 +77,14 @@ aiRouter.post(
 
 function convJson(r: IdRow) {
   const count = (db.prepare('SELECT COUNT(*) c FROM ai_messages WHERE conversation_id = ?').get(r.id) as { c: number }).c
-  return { id: r.id, title: r.title, createdAt: r.created_at, updatedAt: r.updated_at, messages: count }
+  return { id: r.id, title: r.title, mode: (r.mode as string) || 'assistant', createdAt: r.created_at, updatedAt: r.updated_at, messages: count }
+}
+
+/** Developer conversations are only reachable from an unlocked developer session. */
+function requireMode(req: Request, res: Response, next: NextFunction): void {
+  const mode = str(req.query.mode, 20) || str(req.body?.mode, 20) || 'assistant'
+  if (mode === 'dev') return requireDev(req, res, next)
+  next()
 }
 
 function msgJson(r: IdRow) {
@@ -92,8 +100,10 @@ function msgJson(r: IdRow) {
 aiRouter.get(
   '/conversations',
   requireAi,
+  requireMode,
   wrap((req, res) => {
-    const rows = db.prepare('SELECT * FROM ai_conversations WHERE user_id = ? ORDER BY updated_at DESC LIMIT 100').all(req.user!.id) as IdRow[]
+    const mode = str(req.query.mode, 20) || 'assistant'
+    const rows = db.prepare('SELECT * FROM ai_conversations WHERE user_id = ? AND mode = ? ORDER BY updated_at DESC LIMIT 100').all(req.user!.id, mode) as IdRow[]
     res.json({ conversations: rows.map(convJson) })
   }),
 )
@@ -101,9 +111,11 @@ aiRouter.get(
 aiRouter.post(
   '/conversations',
   requireAi,
+  requireMode,
   wrap((req, res) => {
     const t = now()
-    const info = db.prepare('INSERT INTO ai_conversations(user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?)').run(req.user!.id, str(req.body?.title, 80) || 'New conversation', t, t)
+    const mode = str(req.body?.mode, 20) === 'dev' ? 'dev' : 'assistant'
+    const info = db.prepare('INSERT INTO ai_conversations(user_id, title, mode, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run(req.user!.id, str(req.body?.title, 80) || 'New conversation', mode, t, t)
     res.status(201).json({ conversation: convJson(db.prepare('SELECT * FROM ai_conversations WHERE id = ?').get(info.lastInsertRowid as number) as IdRow) })
   }),
 )
@@ -111,6 +123,7 @@ aiRouter.post(
 function ownConv(req: Request): IdRow {
   const row = db.prepare('SELECT * FROM ai_conversations WHERE id = ? AND user_id = ?').get(Number(req.params.id), req.user!.id) as IdRow | undefined
   if (!row) throw new HttpError(404, 'Conversation not found')
+  if (row.mode === 'dev' && !req.devSession) throw new HttpError(403, 'Unlock the developer panel to open developer conversations')
   return row
 }
 
@@ -170,7 +183,7 @@ aiRouter.post(
     })
     const keepAlive = setInterval(() => res.write(': ping\n\n'), 15_000)
     try {
-      const { result, messageId } = await assistantTurn({ user: req.user!, conversationId: row.id as number, prompt, context, onEvent: (e) => send(e.type, e), signal: abort.signal })
+      const { result, messageId } = await assistantTurn({ user: req.user!, conversationId: row.id as number, prompt, context, onEvent: (e) => send(e.type, e), signal: abort.signal, dev: row.mode === 'dev' && req.devSession ? { sessionId: req.devSession.id } : undefined })
       send('done', { messageId, backend: result.backend, tools: result.toolsUsed, text: result.text })
     } catch (e) {
       send('error', { message: (e as Error).message })

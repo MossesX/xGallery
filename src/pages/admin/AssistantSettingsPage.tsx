@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, Code2, Download, FlaskConical, KeyRound, Plug, RefreshCw, Sparkles, X } from 'lucide-react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Check, Code2, FlaskConical, KeyRound, Plug, Sparkles, X } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { api } from '../../api/client'
 import { useAiSettings } from '../../api/hooks'
 import type { AiSettingsView } from '../../api/types'
@@ -25,7 +26,6 @@ export function AssistantSettingsPage() {
   useEffect(() => {
     if (data && !draft) setDraft({ enabled: data.settings.enabled, model: data.settings.model, allowCodeChanges: data.settings.allowCodeChanges, extraInstructions: data.settings.extraInstructions, assistantName: data.settings.assistantName, subscriptionToken: '', apiKey: '' })
   }, [data, draft])
-  const workspace = useQuery({ queryKey: ['ai-workspace'], queryFn: () => api.get<{ diff: string; files: string[]; sourceVersion: string }>('/api/ai/workspace'), enabled: !!data?.settings.allowCodeChanges })
 
   const save = useMutation({
     mutationFn: (patch: Partial<Draft> & { clearSubscriptionToken?: boolean; clearApiKey?: boolean }) => api.put<{ settings: AiSettingsView }>('/api/ai/settings', patch),
@@ -50,13 +50,6 @@ export function AssistantSettingsPage() {
     },
     onError: (e: Error) => notify(e.message, 'error'),
     onSettled: () => setTesting(null),
-  })
-  const reset = useMutation({
-    mutationFn: () => api.post('/api/ai/workspace/reset', {}),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['ai-workspace'] })
-      notify('Workspace reset to the deployed source', 'success')
-    },
   })
 
   if (!data || !draft) return null
@@ -199,56 +192,13 @@ export function AssistantSettingsPage() {
             </div>
           </section>
 
-          <section className="card stack" style={{ gap: 'calc(var(--space) * 2)' }}>
-            <div className="row between">
-              <h3 style={{ margin: 0 }}>
-                <Code2 size={15} /> Building source code
-              </h3>
-              {s.allowCodeChanges ? <span className="badge success">Allowed</span> : <span className="badge">Read only</span>}
-            </div>
-            <label className="checkbox">
-              <input type="checkbox" checked={draft.allowCodeChanges} onChange={(e) => { setDraft({ ...draft, allowCodeChanges: e.target.checked }); save.mutate({ allowCodeChanges: e.target.checked }) }} /> Allow the assistant to edit source code (you only)
-            </label>
+          <section className="card stack" style={{ gap: 8 }}>
+            <h3 style={{ margin: 0 }}>
+              <Code2 size={15} /> Building source code
+            </h3>
             <p className="muted small" style={{ margin: 0 }}>
-              When on, your conversations run against a writable copy of the repository. The assistant can create and edit files; nothing is deployed. Review the diff below, download it as a patch and apply it in git, then reset the workspace.
+              Source editing lives in the <Link to="/dev">developer panel</Link>: the developer AI, the code editor, checkpoints and restore, and the session log. The developer AI uses the connection configured on this page.
             </p>
-            {s.allowCodeChanges && (
-              <div className="stack" style={{ gap: 10 }}>
-                <div className="row between">
-                  <span className="small muted">
-                    {workspace.data?.files.length ? `${workspace.data.files.length} changed file${workspace.data.files.length === 1 ? '' : 's'}` : 'No changes in the workspace'}
-                    {workspace.data ? ` · snapshot ${workspace.data.sourceVersion}` : ''}
-                  </span>
-                  <span className="row" style={{ gap: 6 }}>
-                    <button className="btn ghost icon sm" title="Refresh" onClick={() => workspace.refetch()}>
-                      <RefreshCw size={14} />
-                    </button>
-                    {!!workspace.data?.files.length && (
-                      <>
-                        <a className="btn sm" href="/api/ai/workspace/patch">
-                          <Download size={14} /> Patch
-                        </a>
-                        <button className="btn ghost sm danger" onClick={() => confirm('Discard every change the assistant made?') && reset.mutate()}>
-                          Reset
-                        </button>
-                      </>
-                    )}
-                  </span>
-                </div>
-                {!!workspace.data?.files.length && (
-                  <>
-                    <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>
-                      {workspace.data.files.map((f) => (
-                        <li key={f}>
-                          <code>{f}</code>
-                        </li>
-                      ))}
-                    </ul>
-                    <pre className="diff">{workspace.data.diff.slice(0, 60000)}</pre>
-                  </>
-                )}
-              </div>
-            )}
           </section>
         </div>
       </div>

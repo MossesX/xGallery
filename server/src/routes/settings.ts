@@ -3,6 +3,7 @@ import { db, getSetting, setSetting } from '../db.js'
 import { requireAdmin, requireOwner } from '../auth.js'
 import { isOwner, managedGalleryIds } from '../access.js'
 import { getPolicy } from '../policy.js'
+import { devEvent, getUi, takeSnapshot } from '../dev.js'
 import { DEFAULT_SETTINGS } from '../brand.js'
 import { bool, num, str, wrap, IdRow } from '../util.js'
 
@@ -22,6 +23,7 @@ settingsRouter.get(
     res.json({
       settings: s,
       policy: { publicBrowsing: policy.publicBrowsing, acceptRequests: policy.acceptRequests },
+      ui: getUi(),
       theme: theme
         ? { id: theme.id, name: theme.name, light: JSON.parse(theme.light as string), dark: JSON.parse(theme.dark as string), fontDisplay: theme.font_display, fontBody: theme.font_body, radius: theme.radius, scale: theme.scale, builtIn: !!theme.built_in, createdAt: theme.created_at }
         : null,
@@ -47,7 +49,10 @@ settingsRouter.put(
       allowDownloads: b.allowDownloads != null ? bool(b.allowDownloads, s.allowDownloads) : s.allowDownloads,
       heroAlbumId: b.heroAlbumId !== undefined ? (b.heroAlbumId == null ? null : num(b.heroAlbumId)) : s.heroAlbumId,
     }
+    if (req.devSession) takeSnapshot(req.devSession.id, 'Before appearance save')
     setSetting('site', next)
+    const changed = (Object.keys(next) as (keyof typeof next)[]).filter((k) => JSON.stringify(next[k]) !== JSON.stringify(s[k]))
+    devEvent(req, changed.includes('activeThemeId') && changed.length === 1 ? 'theme.activate' : 'config.save', { path: 'settings/site', detail: { changed }, summary: changed.includes('activeThemeId') && changed.length === 1 ? `Theme #${next.activeThemeId ?? 'none'} activated` : `Appearance saved: ${changed.join(', ') || 'no change'}` })
     res.json({ settings: next })
   }),
 )

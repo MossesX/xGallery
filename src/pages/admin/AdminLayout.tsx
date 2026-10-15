@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { Activity, Bell, FolderTree, Images, Inbox, LayoutDashboard, Palette, ShieldCheck, SlidersHorizontal, Sparkles, UserCircle2, Users } from 'lucide-react'
+import { Activity, Bell, Code2, FolderTree, Images, Inbox, LayoutDashboard, ShieldCheck, Sparkles, UserCircle2, Users } from 'lucide-react'
 import { useInboxUnread, useNotifUnread } from '../../api/hooks'
 import { useMe } from '../../api/hooks'
 
@@ -13,8 +13,6 @@ const LINKS = [
   { to: '/admin/inbox', label: 'Inbox', icon: Inbox, ownerOnly: true, badge: 'inbox' },
   { to: '/admin/assistant', label: 'Assistant', icon: Sparkles, ownerOnly: true },
   { to: '/admin/activity', label: 'Activity', icon: Activity, ownerOnly: true },
-  { to: '/admin/themes', label: 'Themes', icon: Palette, ownerOnly: true },
-  { to: '/admin/appearance', label: 'Site appearance', icon: SlidersHorizontal, ownerOnly: true },
 ]
 
 export function AdminLayout() {
@@ -36,6 +34,16 @@ export function AdminLayout() {
               {badge === 'albums' && !!notif?.admin?.albums && <span className="nav-badge">{notif.admin.albums}</span>}
             </NavLink>
           ))}
+          {me?.role === 'owner' && (
+            <>
+              <div className="eyebrow" style={{ padding: '16px 12px 8px' }}>
+                Build
+              </div>
+              <NavLink to="/dev">
+                <Code2 size={16} /> Developer panel
+              </NavLink>
+            </>
+          )}
           <div className="eyebrow" style={{ padding: '16px 12px 8px' }}>
             Personal
           </div>
