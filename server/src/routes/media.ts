@@ -9,6 +9,7 @@ import { requirePerm, requireUser } from '../auth.js'
 import { HttpError, num, parseJson, str, wrap, IdRow } from '../util.js'
 import { commentJson, mediaJson } from '../serialize.js'
 import { canManageGallery, canViewAlbum } from '../access.js'
+import { track } from '../activity.js'
 
 export const mediaRouter = Router()
 
@@ -101,6 +102,7 @@ mediaRouter.post(
       .prepare('INSERT INTO media(album_id, kind, title, description, mime, file_path, width, height, size, duration, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
       .run(albumId, kind, str(meta.title, 200) || name.replace(/\.[^.]+$/, ''), '', mime, rel, num(meta.width), num(meta.height), size, meta.duration == null ? null : num(meta.duration), (last.m ?? 0) + 1, now())
     db.prepare('UPDATE albums SET updated_at = ? WHERE id = ?').run(now(), albumId)
+    track(req, 'media.upload', { targetType: 'media', targetId: info.lastInsertRowid as number, targetLabel: name, detail: { albumId, kind, size } })
     res.status(201).json({ media: mediaJson(loadMedia(info.lastInsertRowid as number), req.user!.id) })
   }),
 )
@@ -186,6 +188,7 @@ mediaRouter.delete(
     db.prepare('DELETE FROM media WHERE id = ?').run(row.id)
     db.prepare('UPDATE albums SET cover_media_id = NULL WHERE cover_media_id = ?').run(row.id)
     removeMediaFiles(row)
+    track(req, 'media.delete', { targetType: 'media', targetId: row.id as number, targetLabel: String(row.title ?? '') })
     res.json({ ok: true })
   }),
 )
@@ -211,6 +214,7 @@ mediaRouter.post(
     const existing = db.prepare('SELECT id FROM likes WHERE user_id = ? AND media_id = ?').get(req.user!.id, row.id)
     if (existing) db.prepare('DELETE FROM likes WHERE id = ?').run((existing as { id: number }).id)
     else db.prepare('INSERT INTO likes(user_id, media_id, created_at) VALUES (?, ?, ?)').run(req.user!.id, row.id, now())
+    track(req, existing ? 'media.unlike' : 'media.like', { targetType: 'media', targetId: row.id as number, targetLabel: String(row.title ?? '') })
     res.json({ media: mediaJson(loadMedia(row.id as number), req.user!.id) })
   }),
 )
@@ -239,6 +243,7 @@ mediaRouter.post(
     if (!body) throw new HttpError(400, 'Comment cannot be empty')
     const info = db.prepare('INSERT INTO comments(user_id, media_id, body, created_at) VALUES (?, ?, ?, ?)').run(req.user!.id, row.id, body, now())
     const c = db.prepare('SELECT c.*, u.display_name, u.username, u.avatar_path FROM comments c JOIN users u ON u.id = c.user_id WHERE c.id = ?').get(info.lastInsertRowid as number) as IdRow
+    track(req, 'comment.media', { targetType: 'media', targetId: row.id as number, targetLabel: String(row.title ?? ''), detail: { body: String(c.body ?? '').slice(0, 140) } })
     res.status(201).json({ comment: commentJson(c) })
   }),
 )

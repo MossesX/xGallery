@@ -4,6 +4,7 @@ import { db, now } from '../db.js'
 import { createSession, hashPassword, newSalt, parsePerms, publicUser, requireAdmin, requireOwner, setSessionCookie, type Perms } from '../auth.js'
 import { HttpError, num, str, wrap, IdRow } from '../util.js'
 import { ensureGalleryFor, galleryOf, grantGallery, isOwner, managedGalleryIds } from '../access.js'
+import { track } from '../activity.js'
 
 export const usersRouter = Router()
 usersRouter.use(requireAdmin)
@@ -80,6 +81,7 @@ usersRouter.post(
       if (g) grants.push(g.id)
     }
     for (const g of grants) grantGallery(row.id, g)
+    track(req, 'admin.user_create', { userId: row.id, targetType: 'user', targetId: row.id, targetLabel: username, detail: { role } })
     res.status(201).json({ user: userJson(row) })
   }),
 )
@@ -114,6 +116,7 @@ usersRouter.post(
     const displayName = str(req.body?.displayName, 80) || username.split('-').slice(0, 2).map((w) => w[0].toUpperCase() + w.slice(1)).join(' ')
     const row = insertUser({ username, displayName, role: 'user', password, status: 'pending', createdBy: req.user!.id })
     grantGallery(row.id, galleryId)
+    track(req, 'admin.user_generate', { userId: row.id, targetType: 'user', targetId: row.id, targetLabel: username })
     res.status(201).json({ user: userJson(row), credentials: { username, password } })
   }),
 )
@@ -172,6 +175,8 @@ usersRouter.put(
       const own = galleryOf(id)
       if (own) grantGallery(id, own.id)
     }
+    const changed = Object.keys(b).filter((k) => k !== 'password')
+    track(req, typeof b.password === 'string' && b.password ? 'admin.user_password_reset' : 'admin.user_update', { userId: id, targetType: 'user', targetId: id, targetLabel: String(row.username), detail: { fields: changed } })
     res.json({ user: userJson(db.prepare('SELECT * FROM users WHERE id = ?').get(id) as IdRow) })
   }),
 )
@@ -196,6 +201,7 @@ usersRouter.post(
   wrap((req, res) => {
     const id = Number(req.params.id)
     const r = db.prepare('DELETE FROM sessions WHERE user_id = ? AND token <> ?').run(id, id === req.user!.id ? (req.sessionToken ?? '') : '') as { changes: number }
+    track(req, 'admin.user_signout', { userId: id, targetType: 'user', targetId: id, detail: { sessions: r.changes } })
     res.json({ ok: true, sessions: r.changes })
   }),
 )
@@ -211,6 +217,7 @@ usersRouter.post(
     if (row.role === 'owner') throw new HttpError(400, 'You are the owner already')
     if (row.disabled) throw new HttpError(400, 'That account is disabled')
     const token = createSession(id)
+    track(req, 'admin.impersonate', { userId: id, targetType: 'user', targetId: id, targetLabel: String(row.username) })
     setSessionCookie(res, token, req.sessionToken ?? null)
     res.json({ user: publicUser(row) })
   }),
@@ -245,6 +252,7 @@ usersRouter.post(
     if (Array.isArray(b.revokeGalleryIds)) for (const id of targets) for (const g of (b.revokeGalleryIds as unknown[]).map(Number)) if (Number.isFinite(g) && galleryOf(id)?.id !== g) db.prepare('DELETE FROM gallery_access WHERE user_id = ? AND gallery_id = ?').run(id, g)
     if (b.signOut === true) db.prepare(`DELETE FROM sessions WHERE user_id IN (${tm})`).run(...targets)
     if (b.delete === true) db.prepare(`DELETE FROM users WHERE id IN (${tm})`).run(...targets)
+    for (const id of targets) track(req, 'admin.user_bulk', { userId: id, targetType: 'user', targetId: id, detail: { patch: b } })
     res.json({ ok: true, changed: targets.length })
   }),
 )
@@ -258,6 +266,7 @@ usersRouter.delete(
     if (!row) throw new HttpError(404, 'User not found')
     if (!isOwner(req.user) && (row.created_by !== req.user!.id || row.role !== 'user')) throw new HttpError(403, 'You can only delete members you created')
     if (row.role === 'owner') throw new HttpError(400, 'The owner account cannot be deleted')
+    track(req, 'admin.user_delete', { userId: id, targetType: 'user', targetId: id, targetLabel: String(row.username) })
     db.prepare('DELETE FROM users WHERE id = ?').run(id)
     res.json({ ok: true })
   }),

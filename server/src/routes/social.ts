@@ -6,6 +6,7 @@ import { db, MEDIA_DIR, now } from '../db.js'
 import { avatarUrlFor, publicUser, requirePerm, requireUser } from '../auth.js'
 import { HttpError, str, wrap, IdRow } from '../util.js'
 import { areBuddies, galleryOf } from '../access.js'
+import { track } from '../activity.js'
 
 /** Social layer: profile pictures, the people directory, buddy lists and private messages. */
 export const socialRouter = Router()
@@ -65,6 +66,7 @@ socialRouter.post(
     await pipeline(req, createWriteStream(abs))
     const old = db.prepare('SELECT avatar_path FROM users WHERE id = ?').get(req.user!.id) as { avatar_path: string | null }
     db.prepare('UPDATE users SET avatar_path = ? WHERE id = ?').run(rel, req.user!.id)
+    track(req, 'profile.avatar', { detail: { size: received } })
     if (old.avatar_path && existsSync(path.join(MEDIA_DIR, old.avatar_path))) {
       try {
         unlinkSync(path.join(MEDIA_DIR, old.avatar_path))
@@ -147,6 +149,7 @@ socialRouter.post(
     const incoming = db.prepare("SELECT id FROM buddies WHERE user_id = ? AND buddy_id = ? AND status = 'pending'").get(other, me)
     if (incoming) db.prepare("UPDATE buddies SET status = 'accepted' WHERE user_id = ? AND buddy_id = ?").run(other, me)
     else db.prepare("INSERT OR IGNORE INTO buddies(user_id, buddy_id, status, created_at) VALUES (?, ?, 'pending', ?)").run(me, other, now())
+    track(req, incoming ? 'buddy.accept' : 'buddy.request', { targetType: 'user', targetId: other, targetLabel: String(row.username) })
     res.json({ person: personJson(row, me) })
   }),
 )
@@ -160,6 +163,7 @@ socialRouter.put(
     const r = db.prepare("UPDATE buddies SET status = 'accepted' WHERE user_id = ? AND buddy_id = ? AND status = 'pending'").run(other, me) as { changes: number }
     if (!r.changes) throw new HttpError(404, 'No pending request from that person')
     const row = db.prepare('SELECT * FROM users WHERE id = ?').get(other) as IdRow
+    track(req, 'buddy.accept', { targetType: 'user', targetId: other, targetLabel: String(row.username) })
     res.json({ person: personJson(row, me) })
   }),
 )
@@ -172,6 +176,7 @@ socialRouter.delete(
     const me = req.user!.id
     const other = Number(req.params.id)
     db.prepare('DELETE FROM buddies WHERE (user_id = ? AND buddy_id = ?) OR (user_id = ? AND buddy_id = ?)').run(me, other, other, me)
+    track(req, 'buddy.remove', { targetType: 'user', targetId: other })
     const row = db.prepare('SELECT * FROM users WHERE id = ?').get(other) as IdRow | undefined
     res.json({ person: row ? personJson(row, me) : null })
   }),
@@ -250,6 +255,7 @@ socialRouter.post(
     const body = str(req.body?.body, 4000).trim()
     if (!body) throw new HttpError(400, 'Message is empty')
     const info = db.prepare('INSERT INTO messages(from_id, to_id, body, created_at) VALUES (?, ?, ?, ?)').run(me, other, body, now())
+    track(req, 'message.send', { targetType: 'user', targetId: other, targetLabel: String(u.username), detail: { length: body.length } })
     res.status(201).json({ message: messageJson(db.prepare('SELECT * FROM messages WHERE id = ?').get(info.lastInsertRowid as number) as IdRow) })
   }),
 )

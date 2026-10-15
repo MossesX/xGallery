@@ -13,11 +13,12 @@ export function RequestAccountPage() {
   const { data: site } = useSettings()
   const [name, setName] = useState('')
   const [username, setUsername] = useState('')
-  const [contact, setContact] = useState('')
+  const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
   const [message, setMessage] = useState('')
   const [sent, setSent] = useState(false)
   const request = useMutation({
-    mutationFn: () => (me ? api.post('/api/inbox/contact', { message }) : api.post('/api/inbox/request', { name, username, contact, message })),
+    mutationFn: () => (me ? api.post('/api/inbox/contact', { message }) : api.post('/api/inbox/request', { name, username, email, phone, message })),
     onSuccess: () => setSent(true),
   })
   const Shell = me ? AppShell : PublicShell
@@ -63,13 +64,20 @@ export function RequestAccountPage() {
                   </div>
                   <div className="row" style={{ alignItems: 'flex-start' }}>
                     <div className="field grow">
-                      <label htmlFor="rq-user">Preferred username</label>
-                      <input id="rq-user" className="input" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="optional" />
+                      <label htmlFor="rq-email">Email address</label>
+                      <input id="rq-email" className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" />
                     </div>
                     <div className="field grow">
-                      <label htmlFor="rq-contact">Email or handle</label>
-                      <input id="rq-contact" className="input" value={contact} onChange={(e) => setContact(e.target.value)} placeholder="how to reach you" required />
+                      <label htmlFor="rq-phone">Phone number</label>
+                      <input id="rq-phone" className="input" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+1 555 123 4567" autoComplete="tel" />
                     </div>
+                  </div>
+                  <p className="muted small" style={{ margin: '-8px 0 0' }}>
+                    An email address or a phone number is required so the owner can reach you.
+                  </p>
+                  <div className="field">
+                    <label htmlFor="rq-user">Preferred username</label>
+                    <input id="rq-user" className="input" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="optional" />
                   </div>
                 </>
               )}
@@ -77,7 +85,7 @@ export function RequestAccountPage() {
                 <label htmlFor="rq-msg">{me ? 'Message' : 'Anything the owner should know'}</label>
                 <textarea id="rq-msg" className="textarea" value={message} onChange={(e) => setMessage(e.target.value)} style={{ minHeight: 110 }} placeholder={me ? 'What would you like to tell the owner?' : 'Who invited you, what you want to share…'} required={!!me} />
               </div>
-              <button className="btn primary lg" disabled={request.isPending || (me ? !message.trim() : !name.trim() || !contact.trim())}>
+              <button className="btn primary lg" disabled={request.isPending || (me ? !message.trim() : !name.trim() || (!email.trim() && !phone.trim()))}>
                 {me ? <Mail size={16} /> : <UserPlus size={16} />} {me ? 'Send to the owner' : 'Send request'}
               </button>
               {!me && (

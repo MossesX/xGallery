@@ -3,7 +3,9 @@ import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Eye, ExternalLink, Images, KeyRound, LogOut, MessageCircle, Save, Sparkles, Trash2, UserCheck, UserX, X } from 'lucide-react'
 import { api } from '../api/client'
-import { keys, useMe } from '../api/hooks'
+import { keys, useMe, useUserActivity } from '../api/hooks'
+import { EventRow } from '../pages/admin/ActivityPage'
+import { Activity } from 'lucide-react'
 import type { Perms, Role, User } from '../api/types'
 import { Avatar } from './Avatar'
 import { CheckList } from './CheckList'
@@ -31,6 +33,7 @@ export function MemberDrawer({ userId, galleries, onClose }: { userId: number | 
   const notify = useUI((s) => s.notify)
   const { data: me } = useMe()
   const { data, isLoading } = useQuery({ queryKey: ['user-detail', userId], queryFn: () => api.get<Detail>(`/api/users/${userId}`), enabled: userId != null })
+  const { data: activity } = useUserActivity(userId)
   const [draft, setDraft] = useState<{ displayName: string; username: string; bio: string; role: Role; status: 'active' | 'pending'; galleryIds: number[]; perms: Perms } | null>(null)
   const [password, setPassword] = useState('')
   useEffect(() => {
@@ -254,6 +257,41 @@ export function MemberDrawer({ userId, galleries, onClose }: { userId: number | 
                 </button>
               </div>
               <p className="muted small" style={{ margin: 0 }}>Resetting signs the account out everywhere and marks it pending until the next sign-in.</p>
+            </section>
+
+            <section className="card stack" style={{ gap: 8 }}>
+              <div className="row between">
+                <h3 style={{ margin: 0 }}>
+                  <Activity size={14} /> Activity
+                </h3>
+                <Link to={`/admin/activity?userId=${u.id}`} className="small" onClick={onClose}>
+                  Full log →
+                </Link>
+              </div>
+              {activity?.summary && (
+                <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+                  <span className="chip">{activity.summary.total} events</span>
+                  {Object.entries(activity.summary.byKind)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 6)
+                    .map(([k, n]) => (
+                      <span className="chip chip-tag" key={k}>
+                        {k} <span className="muted">{n}</span>
+                      </span>
+                    ))}
+                </div>
+              )}
+              {!activity ? (
+                <div className="muted small">Loading…</div>
+              ) : activity.events.length === 0 ? (
+                <div className="muted small">No activity recorded for this account yet.</div>
+              ) : (
+                <div className="event-list compact">
+                  {activity.events.slice(0, 25).map((e) => (
+                    <EventRow e={e} users={activity.users} key={`${e.partition}-${e.id}`} />
+                  ))}
+                </div>
+              )}
             </section>
 
             {data.albums.length > 0 && (

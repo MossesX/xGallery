@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { db, now } from '../db.js'
 import { createSession, destroySession, hashPassword, newSalt, publicUser, requireUser, returningOwner, setSessionCookie, verifyPassword } from '../auth.js'
 import { HttpError, str, wrap, IdRow } from '../util.js'
+import { track, logActivity } from '../activity.js'
 
 export const authRouter = Router()
 
@@ -12,10 +13,12 @@ authRouter.post(
     const password = typeof req.body?.password === 'string' ? req.body.password : ''
     const row = db.prepare('SELECT * FROM users WHERE username = ?').get(username) as IdRow | undefined
     if (!row || !verifyPassword(password, row.salt as string, row.password_hash as string)) {
+      logActivity({ userId: (row?.id as number | undefined) ?? null, kind: 'auth.login_failed', targetLabel: username, ip: req.ip ?? '' })
       throw new HttpError(401, 'Invalid username or password')
     }
     if (row.disabled) throw new HttpError(403, 'This account has been disabled')
     const token = createSession(row.id as number)
+    logActivity({ userId: row.id as number, kind: 'auth.login', targetLabel: username, ip: req.ip ?? '', detail: { userAgent: str(req.headers['user-agent'], 200) } })
     setSessionCookie(res, token)
     db.prepare("UPDATE users SET last_seen_at = ?, status = 'active' WHERE id = ?").run(now(), row.id)
     res.json({ user: publicUser(db.prepare('SELECT * FROM users WHERE id = ?').get(row.id) as IdRow) })
@@ -25,6 +28,7 @@ authRouter.post(
 authRouter.post(
   '/logout',
   wrap((req, res) => {
+    if (req.user) track(req, 'auth.logout')
     if (req.sessionToken) destroySession(req.sessionToken)
     setSessionCookie(res, null, null)
     res.json({ ok: true })
@@ -43,6 +47,7 @@ authRouter.post(
     const ret = returningOwner(req)
     if (!ret) throw new HttpError(400, 'Not viewing as anyone')
     if (req.sessionToken && req.sessionToken !== ret.token) destroySession(req.sessionToken)
+    logActivity({ userId: req.user!.id, actorId: ret.user.id, kind: 'admin.impersonate_end', targetType: 'user', targetId: req.user!.id, targetLabel: req.user!.username, ip: req.ip ?? '' })
     setSessionCookie(res, ret.token, null)
     res.json({ user: ret.user })
   }),
@@ -55,6 +60,7 @@ authRouter.put(
     const displayName = str(req.body?.displayName, 80) || req.user!.username
     const bio = str(req.body?.bio, 400)
     db.prepare('UPDATE users SET display_name = ?, bio = ? WHERE id = ?').run(displayName, bio, req.user!.id)
+    track(req, 'profile.update', { detail: { displayName } })
     const row = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user!.id) as IdRow
     res.json({ user: publicUser(row) })
   }),
@@ -73,6 +79,7 @@ authRouter.post(
     db.prepare('UPDATE users SET salt = ?, password_hash = ? WHERE id = ?').run(salt, hashPassword(next, salt), req.user!.id)
     // sign other sessions out
     db.prepare('DELETE FROM sessions WHERE user_id = ? AND token <> ?').run(req.user!.id, req.sessionToken ?? '')
+    track(req, 'profile.password_changed')
     res.json({ ok: true })
   }),
 )

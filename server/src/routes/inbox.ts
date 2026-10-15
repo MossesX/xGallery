@@ -4,6 +4,7 @@ import { db, now } from '../db.js'
 import { hashPassword, newSalt, publicUser, requireOwner, requireUser } from '../auth.js'
 import { HttpError, str, wrap, IdRow } from '../util.js'
 import { ensureGalleryFor, grantGallery, galleryOf } from '../access.js'
+import { track, logActivity } from '../activity.js'
 
 /**
  * The owner's inbox: account requests from visitors and contact messages from members. Separate
@@ -47,12 +48,17 @@ inboxRouter.post(
     throttle(req.ip ?? 'unknown')
     const name = str(req.body?.name, 80).trim()
     const username = str(req.body?.username, 32).trim().toLowerCase()
-    const contact = str(req.body?.contact, 160).trim()
+    const email = str(req.body?.email, 160).trim().toLowerCase()
+    const phone = str(req.body?.phone, 40).trim()
     const body = str(req.body?.message, 2000).trim()
     if (!name) throw new HttpError(400, 'Tell the owner your name')
     if (username && !/^[a-z0-9_.-]{3,32}$/.test(username)) throw new HttpError(400, 'Username must be 3-32 characters: letters, numbers, dot, dash or underscore')
-    if (!contact) throw new HttpError(400, 'Leave a way to reach you (email or handle)')
-    db.prepare("INSERT INTO admin_messages(kind, from_user_id, name, contact, username_wanted, body, status, created_at) VALUES ('account_request', ?, ?, ?, ?, ?, 'open', ?)").run(req.user?.id ?? null, name, contact, username, body, now())
+    if (!email && !phone) throw new HttpError(400, 'An email address or a phone number is required')
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) throw new HttpError(400, 'That email address does not look right')
+    if (phone && !/^\+?[0-9 ()./-]{7,24}$/.test(phone)) throw new HttpError(400, 'That phone number does not look right (digits, spaces, + ( ) - allowed)')
+    const contact = [email, phone].filter(Boolean).join(' · ')
+    const info = db.prepare("INSERT INTO admin_messages(kind, from_user_id, name, contact, username_wanted, body, status, created_at) VALUES ('account_request', ?, ?, ?, ?, ?, 'open', ?)").run(req.user?.id ?? null, name, contact, username, body, now())
+    logActivity({ userId: req.user?.id ?? null, kind: 'inbox.account_request', targetType: 'inbox', targetId: info.lastInsertRowid as number, targetLabel: name, ip: req.ip ?? '', detail: { email, phone, username } })
     res.status(201).json({ ok: true })
   }),
 )
@@ -64,6 +70,7 @@ inboxRouter.post(
     const body = str(req.body?.message, 4000).trim()
     if (!body) throw new HttpError(400, 'Message is empty')
     db.prepare("INSERT INTO admin_messages(kind, from_user_id, name, contact, body, status, created_at) VALUES ('contact', ?, ?, ?, ?, 'open', ?)").run(req.user!.id, req.user!.display_name, `@${req.user!.username}`, body, now())
+    track(req, 'inbox.contact', { detail: { length: body.length } })
     res.status(201).json({ ok: true })
   }),
 )
@@ -128,6 +135,7 @@ inboxRouter.put(
       const og = galleryOf(req.user!.id)
       if (og) grantGallery(uid, og.id)
       credentials = { username: candidate, password }
+      track(req, 'admin.request_approve', { userId: uid, targetType: 'user', targetId: uid, targetLabel: candidate })
       db.prepare("UPDATE admin_messages SET status = 'approved', handled_at = ?, read_at = COALESCE(read_at, ?), note = ? WHERE id = ?").run(now(), now(), note || `Account @${candidate} created`, row.id)
       res.json({ item: itemJson(db.prepare('SELECT * FROM admin_messages WHERE id = ?').get(row.id) as IdRow), credentials, user: publicUser(db.prepare('SELECT * FROM users WHERE id = ?').get(uid) as IdRow) })
       return

@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { Inbox, LayoutDashboard, Palette, SlidersHorizontal, Sparkles, UserCircle2, Users } from 'lucide-react'
+import { Activity, Inbox, LayoutDashboard, Palette, SlidersHorizontal, Sparkles, UserCircle2, Users } from 'lucide-react'
 import { useInboxUnread } from '../../api/hooks'
 import { useMe } from '../../api/hooks'
 
@@ -8,6 +8,7 @@ const LINKS = [
   { to: '/admin/users', label: 'Members', icon: Users },
   { to: '/admin/inbox', label: 'Inbox', icon: Inbox, ownerOnly: true, badge: 'inbox' },
   { to: '/admin/assistant', label: 'Assistant', icon: Sparkles, ownerOnly: true },
+  { to: '/admin/activity', label: 'Activity', icon: Activity, ownerOnly: true },
   { to: '/admin/themes', label: 'Themes', icon: Palette, ownerOnly: true },
   { to: '/admin/appearance', label: 'Site appearance', icon: SlidersHorizontal, ownerOnly: true },
 ]

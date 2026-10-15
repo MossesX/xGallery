@@ -6,6 +6,7 @@ import { canManageGallery, canViewAlbum, galleryOf, isOwner, managedGalleryIds, 
 import { HttpError, bool, num, slugify, str, wrap, IdRow } from '../util.js'
 import { albumJson, commentJson, mediaJson } from '../serialize.js'
 import { removeMediaFiles } from './media.js'
+import { track, logActivity } from '../activity.js'
 
 export const albumsRouter = Router()
 
@@ -84,6 +85,7 @@ albumsRouter.post(
       db.prepare('UPDATE galleries SET public_album_id = ?, updated_at = ? WHERE id = ?').run(newId, t, galleryId)
     }
     const row = db.prepare('SELECT * FROM albums WHERE id = ?').get(newId) as IdRow
+    track(req, 'album.create', { targetType: 'album', targetId: newId, targetLabel: title, detail: { public: req.body?.makePublic === true } })
     res.status(201).json({ album: albumJson(row, req.user!.id) })
   }),
 )
@@ -153,6 +155,7 @@ albumsRouter.put(
     ).run(title, slug, description, visibility as string, tags, layout, featured, cover, now(), id)
     // An album that stops being public can no longer be the gallery's public hook.
     if (visibility !== 'public') db.prepare('UPDATE galleries SET public_album_id = NULL WHERE public_album_id = ? AND id = ?').run(id, row.gallery_id)
+    track(req, visibility !== row.visibility ? 'album.visibility' : 'album.update', { targetType: 'album', targetId: id, targetLabel: title, detail: visibility !== row.visibility ? { from: row.visibility, to: visibility } : {} })
     res.json({ album: albumJson(db.prepare('SELECT * FROM albums WHERE id = ?').get(id) as IdRow, req.user!.id, { access: true }) })
   }),
 )
@@ -223,6 +226,7 @@ albumsRouter.post(
   wrap((req, res) => {
     const id = loadManaged(req, Number(req.params.id)).id
     const link = createLink(id, req.user!.id, str(req.body?.label, 80))
+    track(req, 'album.link_create', { targetType: 'album', targetId: id, detail: { label: link.label } })
     res.status(201).json({ link: linkJson(link) })
   }),
 )
@@ -234,6 +238,7 @@ albumsRouter.delete(
     const id = loadManaged(req, Number(req.params.id)).id
     const r = db.prepare('UPDATE album_links SET revoked_at = ? WHERE id = ? AND album_id = ? AND revoked_at IS NULL').run(now(), Number(req.params.linkId), id) as { changes: number }
     if (!r.changes) throw new HttpError(404, 'Link not found')
+    track(req, 'album.link_revoke', { targetType: 'album', targetId: id })
     res.json({ ok: true })
   }),
 )
@@ -254,6 +259,7 @@ albumsRouter.delete(
     db.prepare('UPDATE galleries SET public_album_id = NULL WHERE public_album_id = ?').run(id)
     db.prepare('DELETE FROM albums WHERE id = ?').run(id)
     for (const m of media) removeMediaFiles(m)
+    track(req, 'album.delete', { targetType: 'album', targetId: Number(req.params.id) })
     res.json({ ok: true })
   }),
 )
@@ -267,6 +273,7 @@ albumsRouter.post(
     const existing = db.prepare('SELECT id FROM favorites WHERE user_id = ? AND album_id = ?').get(req.user!.id, row.id)
     if (existing) db.prepare('DELETE FROM favorites WHERE user_id = ? AND album_id = ?').run(req.user!.id, row.id)
     else db.prepare('INSERT INTO favorites(user_id, album_id, created_at) VALUES (?, ?, ?)').run(req.user!.id, row.id, now())
+    track(req, existing ? 'album.unfavorite' : 'album.favorite', { targetType: 'album', targetId: row.id, targetLabel: String(row.title ?? '') })
     res.json({ favorited: !existing })
   }),
 )
@@ -293,6 +300,7 @@ albumsRouter.post(
     if (!body) throw new HttpError(400, 'Comment cannot be empty')
     const info = db.prepare('INSERT INTO comments(user_id, album_id, body, created_at) VALUES (?, ?, ?, ?)').run(req.user!.id, row.id, body, now())
     const c = db.prepare('SELECT c.*, u.display_name, u.username, u.avatar_path FROM comments c JOIN users u ON u.id = c.user_id WHERE c.id = ?').get(info.lastInsertRowid as number) as IdRow
+    track(req, 'comment.album', { targetType: 'album', targetId: row.id, targetLabel: String(row.title ?? ''), detail: { body: String(c.body ?? '').slice(0, 140) } })
     res.status(201).json({ comment: commentJson(c) })
   }),
 )
@@ -305,6 +313,7 @@ shareRouter.get(
     const row = albumForToken(req.params.token as string)
     if (!row) throw new HttpError(404, 'This private link is not valid or was revoked')
     db.prepare('UPDATE album_links SET views = views + 1 WHERE token = ?').run(req.params.token as string)
+    logActivity({ userId: req.user?.id ?? null, kind: 'album.link_view', targetType: 'album', targetId: row.id as number, targetLabel: String(row.title ?? ''), ip: req.ip ?? '', detail: { token: (req.params.token as string).slice(0, 6) + '…' } })
     const media = db.prepare('SELECT * FROM media WHERE album_id = ? ORDER BY sort_order, id').all(row.id) as IdRow[]
     const token = req.params.token as string
     res.json({

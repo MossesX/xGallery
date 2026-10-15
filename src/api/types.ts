@@ -336,3 +336,33 @@ export interface AlbumLink {
   views: number
   revokedAt: number | null
 }
+
+/* ---------- activity log ---------- */
+
+export interface ActivityEvent {
+  id: number
+  ts: number
+  userId: number | null
+  actorId: number | null
+  kind: string
+  targetType: string
+  targetId: number | null
+  targetLabel: string
+  detail: Record<string, unknown>
+  ip: string
+  partition: string
+}
+
+export interface ActivityPage {
+  events: ActivityEvent[]
+  nextBefore: number | null
+  users: Record<number, { username: string; displayName: string }>
+  summary?: { total: number; lastTs: number | null; byKind: Record<string, number> }
+}
+
+export interface ActivityPartition {
+  month: string
+  file: string
+  bytes: number
+  events: number
+}

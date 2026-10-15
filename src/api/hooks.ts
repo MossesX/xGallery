@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
-import type { AlbumLink, AiConversation, AiMessage, AiSettingsView, AiStatus, Album, BuddyLists, Comment, Conversation, Gallery, InboxItem, MediaItem, Message, Person, PublicFeed, Session, SiteSettings, Stats, Theme, ThemeDraft, Unread, User } from './types'
+import type { ActivityPage, ActivityPartition, AlbumLink, AiConversation, AiMessage, AiSettingsView, AiStatus, Album, BuddyLists, Comment, Conversation, Gallery, InboxItem, MediaItem, Message, Person, PublicFeed, Session, SiteSettings, Stats, Theme, ThemeDraft, Unread, User } from './types'
 
 export const keys = {
   me: ['me'] as const,
@@ -291,4 +291,23 @@ export function useTogglePublic() {
       qc.invalidateQueries({ queryKey: ['public-feed'] })
     },
   })
+}
+
+/* ---------- activity log (owner) ---------- */
+
+export function useActivity(params: { userId?: number; kind?: string; q?: string; before?: number; limit?: number }, enabled = true) {
+  const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v != null && v !== '').map(([k, v]) => [k, String(v)])).toString()
+  return useQuery({ queryKey: ['activity', params], queryFn: () => api.get<ActivityPage>(`/api/activity${qs ? `?${qs}` : ''}`), enabled, placeholderData: (prev) => prev })
+}
+
+export function useUserActivity(userId: number | null, enabled = true) {
+  return useQuery({ queryKey: ['activity', 'user', userId], queryFn: () => api.get<ActivityPage>(`/api/activity/users/${userId}?limit=60`), enabled: enabled && userId != null })
+}
+
+export function useActivityKinds() {
+  return useQuery({ queryKey: ['activity', 'kinds'], queryFn: () => api.get<{ kinds: string[] }>('/api/activity/kinds').then((r) => r.kinds) })
+}
+
+export function useActivityPartitions() {
+  return useQuery({ queryKey: ['activity', 'partitions'], queryFn: () => api.get<{ partitions: ActivityPartition[] }>('/api/activity/partitions').then((r) => r.partitions) })
 }

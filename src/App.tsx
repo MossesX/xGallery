@@ -29,6 +29,7 @@ import { BuddiesPage } from './pages/me/BuddiesPage'
 import { MessagesPage } from './pages/me/MessagesPage'
 import { AssistantSettingsPage } from './pages/admin/AssistantSettingsPage'
 import { InboxPage } from './pages/admin/InboxPage'
+import { ActivityPage } from './pages/admin/ActivityPage'
 import { RequestAccountPage } from './pages/RequestAccountPage'
 
 const queryClient = new QueryClient({
@@ -100,6 +101,7 @@ export default function App() {
                     <Route element={<RequireAuth role="owner" />}>
                       <Route path="assistant" element={<AssistantSettingsPage />} />
                       <Route path="inbox" element={<InboxPage />} />
+                      <Route path="activity" element={<ActivityPage />} />
                     </Route>
                   </Route>
                 </Route>

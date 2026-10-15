@@ -1,4 +1,5 @@
 import { db, getSetting, now, setSetting } from '../db.js'
+import { logActivity } from '../activity.js'
 import type { User } from '../auth.js'
 import { cliAvailable, runCli } from './cli.js'
 import { runApi } from './api.js'
@@ -197,5 +198,6 @@ export async function assistantTurn(t: AssistantTurn): Promise<{ result: RunResu
     .prepare("INSERT INTO ai_messages(conversation_id, role, content, meta, created_at) VALUES (?, 'assistant', ?, ?, ?)")
     .run(conv.id, result.text, JSON.stringify({ backend: result.backend, tools: result.toolsUsed.slice(0, 50), model: s.model }), now())
   db.prepare('UPDATE ai_conversations SET updated_at = ? WHERE id = ?').run(now(), conv.id)
+  logActivity({ userId: t.user.id, kind: 'ai.turn', targetType: 'conversation', targetId: conv.id, targetLabel: conv.title, detail: { backend: result.backend, tools: result.toolsUsed.length, codeChanges: allowCode, prompt: t.prompt.slice(0, 120) } })
   return { result, messageId: info.lastInsertRowid as number }
 }
