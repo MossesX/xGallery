@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.XGalleryDev" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/xg_accent</item>
+        <item name="colorAccent">@color/xg_accent</item>
+        <item name="android:windowBackground">@color/xg_background</item>
+        <item name="android:statusBarColor">@color/xg_background</item>
+        <item name="android:navigationBarColor">@color/xg_background</item>
+    </style>
+</resources>

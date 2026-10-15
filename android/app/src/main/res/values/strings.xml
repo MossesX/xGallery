@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">xGallery Dev</string>
+    <string name="unlock_title">Unlock the developer panel</string>
+    <string name="unlock_subtitle">Fingerprint, face or device PIN</string>
+    <string name="no_handler">No app can open this download</string>
+</resources>

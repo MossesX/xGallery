@@ -44,6 +44,7 @@ import {
   DEFAULT_UI,
   type DevSession,
 } from '../dev.js'
+import { DEFAULT_OPS, getOps, saveOps } from '../ops.js'
 
 export const devRouter = Router()
 
@@ -461,5 +462,21 @@ devRouter.post(
     resetWorkspaceAll(req.devSession!.id)
     logActivity({ userId: req.user!.id, kind: 'dev.workspace_reset', ip: req.ip ?? '' })
     res.json({ ok: true, head: headSha() })
+  }),
+)
+
+/* ---------- operations profile (command wizard + remote shell; never holds secrets) ---------- */
+
+devRouter.get('/ops', requireDev, (_req, res) => {
+  res.json({ ops: getOps(), defaults: DEFAULT_OPS })
+})
+
+devRouter.put(
+  '/ops',
+  requireDev,
+  wrap((req, res) => {
+    const ops = saveOps(req.body?.ops ?? req.body)
+    recordEvent(req.devSession!.id, 'settings.ops', { path: 'settings/devOps', summary: `Operations profile saved (${ops.user}@${ops.host}:${ops.port}, ${ops.shell.profiles.length} shell profile${ops.shell.profiles.length === 1 ? '' : 's'})` })
+    res.json({ ops })
   }),
 )

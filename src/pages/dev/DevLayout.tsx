@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, NavLink, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Braces, Code2, Gauge, History, KeyRound, LayoutTemplate, LifeBuoy, ListTodo, Lock, Menu, MousePointerClick, Palette, PanelBottom, PanelTop, Ruler, ScrollText, Settings2, ShieldAlert, SlidersHorizontal, Sparkles, ToggleLeft, Unlock, Wand2 } from 'lucide-react'
+import { Braces, Code2, Gauge, History, KeyRound, LayoutTemplate, LifeBuoy, ListTodo, Lock, Menu, MousePointerClick, Palette, PanelBottom, PanelTop, Ruler, ScrollText, Settings2, ShieldAlert, SlidersHorizontal, Smartphone, Sparkles, TerminalSquare, ToggleLeft, Unlock, Wand2 } from 'lucide-react'
 import { api } from '../../api/client'
 import { useMe } from '../../api/hooks'
 import { devKeys, useDevStatus } from '../../api/dev'
@@ -16,6 +16,11 @@ const LINKS = [
   { to: '/dev/restore', label: 'Checkpoints & restore', icon: History },
   { to: '/dev/sessions', label: 'Session log', icon: ScrollText },
   { to: '/dev/tasks', label: 'Task manager', icon: ListTodo },
+]
+const OPS = [
+  { to: '/dev/ops', label: 'Command wizard', icon: Wand2 },
+  { to: '/dev/shell', label: 'Remote shell · mosh', icon: TerminalSquare },
+  { to: '/dev/android', label: 'Android app', icon: Smartphone },
 ]
 const DESIGN = [
   { to: '/dev/themes', label: 'Themes', icon: Palette },
@@ -85,6 +90,14 @@ export function DevLayout() {
             Site builder
           </div>
           {DESIGN.map(({ to, label, icon: Icon }) => (
+            <NavLink key={to} to={to}>
+              <Icon size={16} /> {label}
+            </NavLink>
+          ))}
+          <div className="eyebrow" style={{ padding: '16px 12px 8px' }}>
+            Operations
+          </div>
+          {OPS.map(({ to, label, icon: Icon }) => (
             <NavLink key={to} to={to}>
               <Icon size={16} /> {label}
             </NavLink>

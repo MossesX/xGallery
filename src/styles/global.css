@@ -1715,3 +1715,24 @@ body.density-compact { --space: 6px; }
 .ctx-menu-sub { position: absolute; left: 100%; top: -6px; }
 .ctx-item.danger { color: var(--c-danger); }
 .ctx-item:disabled { opacity: 0.4; cursor: default; }
+
+
+/* ===================== ops wizard, remote shell, android ===================== */
+.cmd-block { border: 1px solid var(--c-border); border-radius: 10px; overflow: hidden; background: var(--c-bg); }
+.cmd-head { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--c-surface); border-bottom: 1px solid var(--c-border); font-size: 0.82rem; }
+.cmd-code { margin: 0; padding: 10px 12px; font-size: 0.78rem; line-height: 1.5; white-space: pre-wrap; word-break: break-word; max-height: 360px; overflow: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.wizard-steps { display: flex; gap: 6px; flex-wrap: wrap; }
+.wizard-step { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px 6px 6px; border-radius: 999px; border: 1px solid var(--c-border); background: var(--c-surface); color: var(--c-text-muted); font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
+.wizard-step .num { display: inline-flex; width: 24px; height: 24px; align-items: center; justify-content: center; border-radius: 50%; background: var(--c-border); color: var(--c-text); font-size: 0.75rem; }
+.wizard-step.active { border-color: var(--c-primary); color: var(--c-primary); }
+.wizard-step.active .num, .wizard-step.done .num { background: var(--c-primary); color: var(--c-primary-text); }
+.ops-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px 14px; }
+.ops-grid .field > span, .ops-grid .field > label { display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--c-text-muted); margin-bottom: 4px; }
+.recipe-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--c-border); cursor: pointer; font-size: 0.88rem; }
+.recipe-row:hover { background: var(--c-surface-hover); }
+.recipe-row.picked { border-color: var(--c-primary); background: var(--c-primary-soft); }
+.chip.risk-safe { color: var(--c-success); }
+.chip.risk-careful { color: var(--c-warning, #d97706); }
+.chip.risk-danger { color: #ef4444; border-color: currentColor; }
+.shell-layout { display: grid; grid-template-columns: 240px 1fr; gap: 14px; align-items: start; }
+@media (max-width: 900px) { .shell-layout { grid-template-columns: 1fr; } }
