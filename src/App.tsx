@@ -24,6 +24,7 @@ import { DevSettingsPage } from './pages/dev/DevSettingsPage'
 import { OpsWizardPage } from './pages/dev/ops/OpsWizardPage'
 import { ShellPage } from './pages/dev/ops/ShellPage'
 import { AndroidPage } from './pages/dev/ops/AndroidPage'
+import { TerminalPage } from './pages/dev/ops/TerminalPage'
 import { TasksSettingsPage } from './pages/dev/tasks/TasksSettingsPage'
 import { TasksWorkspace } from './pages/dev/tasks/TasksWorkspace'
 import { DevContextMenuPage, DevCssPage, DevFeaturesPage, DevFooterPage, DevHomePage, DevLayoutPage, DevNavigationPage, DevToolbarPage } from './pages/dev/DevDesignPages'
@@ -141,6 +142,7 @@ export default function App() {
                   <Route path="ops" element={<OpsWizardPage />} />
                   <Route path="shell" element={<ShellPage />} />
                   <Route path="android" element={<AndroidPage />} />
+                  <Route path="terminal" element={<TerminalPage />} />
                   <Route path="themes" element={<ThemesPage />} />
                   <Route path="appearance" element={<AppearancePage />} />
                   <Route path="navigation" element={<DevNavigationPage />} />

@@ -1736,3 +1736,24 @@ body.density-compact { --space: 6px; }
 .chip.risk-danger { color: #ef4444; border-color: currentColor; }
 .shell-layout { display: grid; grid-template-columns: 240px 1fr; gap: 14px; align-items: start; }
 @media (max-width: 900px) { .shell-layout { grid-template-columns: 1fr; } }
+
+/* ===================== ssh terminal & offline ===================== */
+.offline-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding: 8px 12px; border-radius: 10px; background: color-mix(in srgb, var(--c-warning, #d97706) 15%, var(--c-surface)); border: 1px solid var(--c-warning, #d97706); font-size: 0.85rem; }
+.term-page { display: flex; flex-direction: column; gap: 8px; min-height: 70vh; }
+.term-page.full { position: fixed; inset: 0; z-index: 80; background: var(--c-bg); padding: 10px; min-height: 100vh; }
+.term-topbar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.term-keycard { padding: 12px; }
+.term-tabs { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--c-border); padding-bottom: 4px; }
+.term-tab { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 8px 8px 0 0; border: 1px solid var(--c-border); border-bottom: 0; background: var(--c-surface); color: var(--c-text-muted); font: inherit; font-size: 0.8rem; cursor: pointer; }
+.term-tab.active { color: var(--c-text); background: #0f0c09; }
+.term-tab .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c-border); }
+.term-tab.st-open .dot { background: var(--c-success); }
+.term-tab.st-connecting .dot { background: var(--c-warning, #d97706); }
+.term-tab.st-error .dot { background: #ef4444; }
+.term-host { flex: 1; min-height: 360px; background: #0f0c09; border: 1px solid var(--c-border); border-radius: 10px; padding: 6px; overflow: hidden; }
+.term-page.full .term-host { min-height: 0; }
+.term-surface { width: 100%; height: 100%; }
+.term-surface .xterm { height: 100%; }
+.term-quick, .term-softkeys { display: flex; gap: 4px; flex-wrap: wrap; }
+.term-softkeys .btn { min-width: 44px; }
+.btn.active { border-color: var(--c-primary); color: var(--c-primary); }

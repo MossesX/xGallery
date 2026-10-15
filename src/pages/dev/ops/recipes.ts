@@ -237,6 +237,18 @@ export const RECIPES: Recipe[] = [
     generate: () => ({ local: `# Requires Claude Code: npm i -g @anthropic-ai/claude-code\nclaude setup-token\n# → copy the token it prints into Admin → Assistant → Claude subscription token, then Verify` }),
   },
   {
+    id: 'claude-on-vps',
+    group: 'Deploy & app',
+    title: 'Install Claude Code on the VPS (run it from the panel terminal)',
+    description: 'Installs Node 22 and the Claude Code CLI on the server itself, so `claude` works in the deploy directory from any shell, and signs it in with your subscription token.',
+    risk: 'careful',
+    inputs: [{ key: 'token', label: 'CLAUDE_CODE_OAUTH_TOKEN (from claude setup-token; optional, can sign in later)', type: 'password' }],
+    generate: (ctx, v, embed) => ({
+      remote: `command -v node >/dev/null 2>&1 && node -v | grep -q '^v2[2-9]' || (curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && apt-get install -y -qq nodejs)\nnpm i -g @anthropic-ai/claude-code\nclaude --version\n${v.token || embed ? `${secret('TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN', v.token, embed)}\ngrep -q CLAUDE_CODE_OAUTH_TOKEN ~/.profile || echo "export CLAUDE_CODE_OAUTH_TOKEN=$TOKEN" >> ~/.profile\n` : '# sign in later with:  claude  (or export CLAUDE_CODE_OAUTH_TOKEN=... in ~/.profile)\n'}echo "run it with:  cd ${ctx.deployDir} && claude"`,
+      notes: ['The panel terminal’s “Claude Code (VPS)” button runs exactly that: cd into the deploy directory and start claude.', 'Inside the app container claude is already installed: the “Claude Code in the app container” button uses it on the workspace copy of the source.'],
+    }),
+  },
+  {
     id: 'pull-image',
     group: 'Deploy & app',
     title: 'Pull the latest published image instead of building on the VPS',

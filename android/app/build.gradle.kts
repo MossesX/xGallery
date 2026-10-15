@@ -43,4 +43,11 @@ dependencies {
     implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
     implementation("androidx.webkit:webkit:1.11.0")
     implementation("androidx.biometric:biometric:1.1.0")
+    // Native SSH for the terminal page and encrypted key storage.
+    implementation("com.hierynomus:sshj:0.38.0")
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+}
+
+android.packaging {
+    resources.excludes += setOf("META-INF/DEPENDENCIES", "META-INF/LICENSE*", "META-INF/NOTICE*", "META-INF/versions/9/OSGI-INF/MANIFEST.MF")
 }

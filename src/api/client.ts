@@ -7,7 +7,16 @@ export class ApiError extends Error {
   }
 }
 
+/** Last response served from the offline cache (set by the service worker), for the "showing cached data" bar. */
+export const offlineState: { cachedAt: string | null; listeners: Set<() => void> } = { cachedAt: null, listeners: new Set() }
+function setCached(v: string | null) {
+  if (offlineState.cachedAt === v) return
+  offlineState.cachedAt = v
+  offlineState.listeners.forEach((l) => l())
+}
+
 async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
+  if (method !== 'GET' && typeof navigator !== 'undefined' && navigator.onLine === false) throw new ApiError(0, 'You are offline: changes are disabled until the connection is back')
   const res = await fetch(url, {
     method,
     credentials: 'include',
@@ -15,6 +24,8 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
     body: body !== undefined ? JSON.stringify(body) : undefined,
   })
   if (res.status === 204) return undefined as T
+  const cached = res.headers.get('X-Offline-Cache')
+  if (method === 'GET') setCached(cached && cached !== 'none' ? cached : null)
   const data = (await res.json().catch(() => ({}))) as { error?: string }
   if (!res.ok) throw new ApiError(res.status, data.error ?? res.statusText)
   return data as T

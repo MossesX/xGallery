@@ -50,6 +50,12 @@ export function AndroidPage() {
           <Fingerprint size={15} /> What the app does
         </h3>
         <ul className="dev-safety">
+          <li>
+            <strong>Works offline.</strong> The panel shell and its data (sessions, tasks, design, profiles) are cached on the phone; without a connection the app opens the last state it saw, read-only, and says so.
+          </li>
+          <li>
+            <strong>Real SSH from the phone.</strong> Terminal → “App SSH client” uses the app’s own SSH client with a key kept in the phone’s encrypted storage, so you reach the VPS even when the site is down. “mosh in Termux” hands a mosh session to Termux.
+          </li>
           <li>Opens https://{domain}/dev in an app window (no browser chrome); the site’s own sign-in and developer password still apply.</li>
           <li>Biometric or device-credential lock every time the app comes to the foreground.</li>
           <li>Keeps you signed in (cookies persist), supports file pickers for uploads, downloads open in the system browser, external links open outside the app.</li>

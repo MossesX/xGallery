@@ -1,12 +1,16 @@
 package com.amberx.xgallery.devpanel
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Bundle
 import android.webkit.CookieManager
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -62,6 +66,9 @@ class MainActivity : AppCompatActivity() {
         }
         CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false)
+        // Real SSH from the phone for the terminal page (window.NativeSsh), plus the Termux hand-off.
+        web.addJavascriptInterface(NativeSshBridge(this, web), "NativeSsh")
+        applyCacheMode()
 
         web.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
@@ -78,6 +85,11 @@ class MainActivity : AppCompatActivity() {
             override fun onPageFinished(view: WebView, url: String?) {
                 refresh.isRefreshing = false
                 CookieManager.getInstance().flush()
+            }
+
+            override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
+                // Only the main document matters; the service worker normally serves it offline.
+                if (request.isForMainFrame && !isOnline()) view.loadUrl("file:///android_asset/offline.html")
             }
         }
         web.webChromeClient = object : WebChromeClient() {
@@ -121,8 +133,20 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        applyCacheMode()
         // Lock again after two minutes in the background.
         if (System.currentTimeMillis() - unlockedAt > 2 * 60 * 1000) requireUnlock()
+    }
+
+    private fun isOnline(): Boolean {
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
+        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }
+
+    /** Offline: serve everything the web view has cached; online: normal validation. */
+    private fun applyCacheMode() {
+        web.settings.cacheMode = if (isOnline()) WebSettings.LOAD_DEFAULT else WebSettings.LOAD_CACHE_ELSE_NETWORK
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

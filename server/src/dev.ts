@@ -105,6 +105,17 @@ export function attachDev(req: Request, _res: Response, next: NextFunction): voi
   next()
 }
 
+/** The open developer session bound to a login token, or undefined when locked or expired. */
+export function devSessionForToken(token: string): DevSession | undefined {
+  const s = openSessionFor(token)
+  if (!s) return undefined
+  if (now() - s.last_active_at > devSettings().sessionMinutes * 60_000) {
+    endSession(s.id, 'expired')
+    return undefined
+  }
+  return s
+}
+
 export function requireDev(req: Request, res: Response, next: NextFunction): void {
   if (!req.user) {
     res.status(401).json({ error: 'Sign in required' })

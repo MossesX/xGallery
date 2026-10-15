@@ -1,7 +1,34 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, NavLink, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Braces, Code2, Gauge, History, KeyRound, LayoutTemplate, LifeBuoy, ListTodo, Lock, Menu, MousePointerClick, Palette, PanelBottom, PanelTop, Ruler, ScrollText, Settings2, ShieldAlert, SlidersHorizontal, Smartphone, Sparkles, TerminalSquare, ToggleLeft, Unlock, Wand2 } from 'lucide-react'
+import { Braces, Code2, Gauge, History, KeyRound, LayoutTemplate, LifeBuoy, ListTodo, Lock, Menu, MousePointerClick, Palette, PanelBottom, PanelTop, Plug, Ruler, ScrollText, Settings2, ShieldAlert, SlidersHorizontal, Smartphone, Sparkles, TerminalSquare, ToggleLeft, Unlock, Wand2, WifiOff } from 'lucide-react'
+import { offlineState } from '../../api/client'
+
+/** "You are offline" / "showing cached data" bar for the panel (the service worker serves the last good copy). */
+function OfflineBar() {
+  const [online, setOnline] = useState(navigator.onLine)
+  const [cachedAt, setCachedAt] = useState(offlineState.cachedAt)
+  useEffect(() => {
+    const on = () => setOnline(true)
+    const off = () => setOnline(false)
+    const l = () => setCachedAt(offlineState.cachedAt)
+    window.addEventListener('online', on)
+    window.addEventListener('offline', off)
+    offlineState.listeners.add(l)
+    return () => {
+      window.removeEventListener('online', on)
+      window.removeEventListener('offline', off)
+      offlineState.listeners.delete(l)
+    }
+  }, [])
+  if (online && !cachedAt) return null
+  return (
+    <div className="offline-bar" data-offline-bar="">
+      <WifiOff size={14} /> {online ? 'The server did not answer: ' : 'You are offline: '}
+      showing cached panel data{cachedAt ? ` from ${new Date(cachedAt).toLocaleString()}` : ''}. Changes are disabled until the connection is back.
+    </div>
+  )
+}
 import { api } from '../../api/client'
 import { useMe } from '../../api/hooks'
 import { devKeys, useDevStatus } from '../../api/dev'
@@ -18,6 +45,7 @@ const LINKS = [
   { to: '/dev/tasks', label: 'Task manager', icon: ListTodo },
 ]
 const OPS = [
+  { to: '/dev/terminal', label: 'Terminal · SSH', icon: Plug },
   { to: '/dev/ops', label: 'Command wizard', icon: Wand2 },
   { to: '/dev/shell', label: 'Remote shell · mosh', icon: TerminalSquare },
   { to: '/dev/android', label: 'Android app', icon: Smartphone },
@@ -76,6 +104,7 @@ export function DevLayout() {
   const wide = location.pathname.startsWith('/dev/tasks/workspace')
   return (
     <main className={`page dev-page ${wide ? 'dev-wide-page' : ''}`}>
+      <OfflineBar />
       <div className={`admin-layout ${wide ? 'dev-wide' : ''}`}>
         <nav className="admin-nav dev-nav">
           <div className="eyebrow" style={{ padding: '0 12px 8px' }}>

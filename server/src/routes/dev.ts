@@ -45,6 +45,7 @@ import {
   type DevSession,
 } from '../dev.js'
 import { DEFAULT_OPS, getOps, saveOps } from '../ops.js'
+import { clearSshKey, forgetHost, generateSshKey, publicSshConfig, saveSshKey } from '../terminal.js'
 
 export const devRouter = Router()
 
@@ -478,5 +479,58 @@ devRouter.put(
     const ops = saveOps(req.body?.ops ?? req.body)
     recordEvent(req.devSession!.id, 'settings.ops', { path: 'settings/devOps', summary: `Operations profile saved (${ops.user}@${ops.host}:${ops.port}, ${ops.shell.profiles.length} shell profile${ops.shell.profiles.length === 1 ? '' : 's'})` })
     res.json({ ops })
+  }),
+)
+
+/* ---------- SSH terminal identity (the panel's own key on the VPS) ---------- */
+
+devRouter.get('/ssh', requireDev, (_req, res) => {
+  res.json({ ssh: publicSshConfig() })
+})
+
+devRouter.post(
+  '/ssh/generate',
+  requireDev,
+  wrap((req, res) => {
+    const ssh = generateSshKey()
+    recordEvent(req.devSession!.id, 'terminal.key', { summary: `New panel SSH key generated (${ssh.fingerprint})`, detail: { fingerprint: ssh.fingerprint } })
+    res.json({ ssh })
+  }),
+)
+
+devRouter.put(
+  '/ssh',
+  requireDev,
+  wrap((req, res) => {
+    const pasted = str(req.body?.privateKey, 20_000)
+    if (!pasted.includes('-----BEGIN')) throw new HttpError(400, 'Paste a private key in OpenSSH or PEM format')
+    let ssh
+    try {
+      ssh = saveSshKey(pasted, str(req.body?.passphrase, 200))
+    } catch (e) {
+      throw new HttpError(400, (e as Error).message)
+    }
+    recordEvent(req.devSession!.id, 'terminal.key', { summary: `Panel SSH key replaced with a pasted key (${ssh.fingerprint})`, detail: { fingerprint: ssh.fingerprint } })
+    res.json({ ssh })
+  }),
+)
+
+devRouter.delete(
+  '/ssh',
+  requireDev,
+  wrap((req, res) => {
+    clearSshKey()
+    recordEvent(req.devSession!.id, 'terminal.key', { summary: 'Panel SSH key removed' })
+    res.json({ ssh: publicSshConfig() })
+  }),
+)
+
+devRouter.delete(
+  '/ssh/known-hosts/:host',
+  requireDev,
+  wrap((req, res) => {
+    forgetHost(String(req.params.host))
+    recordEvent(req.devSession!.id, 'terminal.key', { summary: `Forgot the pinned host key of ${req.params.host}` })
+    res.json({ ssh: publicSshConfig() })
   }),
 )

@@ -183,6 +183,9 @@ export function useLogout() {
     onSuccess: () => {
       qc.setQueryData(keys.me, null)
       qc.clear()
+      // Drop the offline caches so the next person on this device sees nothing of ours.
+      navigator.serviceWorker?.controller?.postMessage('clear')
+      if ('caches' in window) caches.keys().then((ks) => ks.forEach((k) => caches.delete(k))).catch(() => {})
     },
   })
 }
