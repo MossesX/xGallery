@@ -21,6 +21,7 @@ import { policyRouter } from './routes/policy.js'
 import { notificationsRouter } from './routes/notifications.js'
 import { devRouter } from './routes/dev.js'
 import { tasksRouter } from './routes/tasks.js'
+import { vpsRouter } from './routes/vps.js'
 import { attachDev, sweepDevSessions } from './dev.js'
 import { adminRouter } from './routes/admin.js'
 
@@ -82,6 +83,7 @@ app.use('/api/policy', policyRouter)
 app.use('/api/notifications', notificationsRouter)
 app.use('/api/admin', adminRouter)
 app.use('/api/dev/tasks', tasksRouter)
+app.use('/api/dev/vps', vpsRouter)
 app.use('/api/dev', devRouter)
 app.use('/api/themes', themesRouter)
 app.use('/api/settings', settingsRouter)

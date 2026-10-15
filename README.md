@@ -13,6 +13,15 @@ site. Members sign in to browse, like and comment.
 - Drag-and-drop upload of images and videos. Thumbnails are generated client-side (video poster frames too).
 - Per-item titles and descriptions, reordering, cover selection.
 
+**Developer panel: VPS manager**
+- Hostinger integration (API token kept server-side): VM state and power, DNS zone editor, network
+  firewall, snapshot/backups, root password, hostname, plus a raw API explorer.
+- The machine over SSH with the panel key: live system stats, every Docker container (start / stop /
+  restart / pause / kill / remove, logs, exec, export / import, "test all containers" health report),
+  images, volumes, compose projects, prune; subdomains as Traefik-fronted compose sites with the DNS
+  record created in one step; SFTP file browser and editor with upload/download; ufw; systemd services,
+  journal, apt, crontab, reboot; a one-shot console next to the full SSH terminal and mosh tabs.
+
 **Theming**
 - Every theme carries a matched light *and* dark palette, display/body fonts, corner radius and density.
 - "Roll a theme" generates a harmonious theme (complementary / analogous / triadic / split / monochrome)

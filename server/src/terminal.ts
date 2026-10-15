@@ -81,7 +81,7 @@ export function forgetHost(host: string): void {
   setSetting('devSsh', { ...cur, knownHosts })
 }
 
-function hostKeyCheck(host: string, key: Buffer): { ok: boolean; reason?: string; first?: boolean } {
+export function hostKeyCheck(host: string, key: Buffer): { ok: boolean; reason?: string; first?: boolean } {
   const fp = 'SHA256:' + createHash('sha256').update(key).digest('base64').replace(/=+$/, '')
   const cur = getSshConfig()
   const known = cur.knownHosts[host]

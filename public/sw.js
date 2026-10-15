@@ -10,7 +10,7 @@ const VERSION = 'v1'
 const SHELL = `xg-shell-${VERSION}`
 const DATA = `xg-data-${VERSION}`
 const API_PREFIXES = ['/api/auth/me', '/api/settings', '/api/ai/status', '/api/themes', '/api/dev/']
-const API_SKIP = ['/api/dev/terminal', '/api/dev/patch', '/api/dev/diff', '/api/dev/tasks/lists/']
+const API_SKIP = ['/api/dev/terminal', '/api/dev/patch', '/api/dev/diff', '/api/dev/tasks/lists/', '/api/dev/vps/files/download', '/api/dev/vps/files/read']
 const isExport = (p) => /\/export\.(md|csv|json)$/.test(p)
 
 self.addEventListener('install', (event) => {

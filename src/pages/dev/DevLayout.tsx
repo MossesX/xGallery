@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, NavLink, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Braces, Code2, Gauge, History, KeyRound, LayoutTemplate, LifeBuoy, ListTodo, Lock, Menu, MousePointerClick, Palette, PanelBottom, PanelTop, Plug, Ruler, ScrollText, Settings2, ShieldAlert, SlidersHorizontal, Smartphone, Sparkles, TerminalSquare, ToggleLeft, Unlock, Wand2, WifiOff } from 'lucide-react'
+import { Braces, Code2, Gauge, History, KeyRound, LayoutTemplate, LifeBuoy, ListTodo, Lock, Menu, MousePointerClick, Palette, PanelBottom, PanelTop, Plug, Ruler, ScrollText, Server, Settings2, ShieldAlert, SlidersHorizontal, Smartphone, Sparkles, TerminalSquare, ToggleLeft, Unlock, Wand2, WifiOff } from 'lucide-react'
 import { offlineState } from '../../api/client'
 
 /** "You are offline" / "showing cached data" bar for the panel (the service worker serves the last good copy). */
@@ -45,6 +45,7 @@ const LINKS = [
   { to: '/dev/tasks', label: 'Task manager', icon: ListTodo },
 ]
 const OPS = [
+  { to: '/dev/vps', label: 'VPS manager', icon: Server },
   { to: '/dev/terminal', label: 'Terminal · SSH', icon: Plug },
   { to: '/dev/ops', label: 'Command wizard', icon: Wand2 },
   { to: '/dev/shell', label: 'Remote shell · mosh', icon: TerminalSquare },
