@@ -71,10 +71,17 @@ export function ensureSeeded(): void {
  * so restarts and redeploys with the same secret do nothing). Remove the secret afterwards.
  */
 export function applyOwnerPasswordReset(): void {
-  const value = process.env.RESET_OWNER_PASSWORD ?? ''
-  if (!value) return
+  // Trimmed: a secret pasted with a trailing newline or spaces would otherwise never match what is typed.
+  const value = (process.env.RESET_OWNER_PASSWORD ?? '').trim()
+  if (!value) {
+    console.log('[reset] RESET_OWNER_PASSWORD is not set: nothing to do')
+    return
+  }
   const print = createHash('sha256').update(`owner-reset:${value}`).digest('hex')
-  if (getSetting<string>('ownerResetApplied', '') === print) return
+  if (getSetting<string>('ownerResetApplied', '') === print) {
+    console.log('[reset] RESET_OWNER_PASSWORD is set but this value was already applied earlier; sign in with it, or set a new value to reset again')
+    return
+  }
   if (value.length < 8) {
     console.warn('[reset] RESET_OWNER_PASSWORD is shorter than 8 characters; ignored')
     return
@@ -89,5 +96,5 @@ export function applyOwnerPasswordReset(): void {
   db.prepare('DELETE FROM sessions WHERE user_id = ?').run(owner.id)
   setSetting('ownerResetApplied', print)
   notifyOwner({ kind: 'security.owner_reset', title: `Owner password reset by the RESET_OWNER_PASSWORD switch for @${owner.username}`, body: 'Sign in with the new password, then remove the RESET_OWNER_PASSWORD secret so it cannot be reused.' })
-  console.log(`[reset] owner password reset for @${owner.username}; sessions ended. Remove the RESET_OWNER_PASSWORD secret now.`)
+  console.log(`[reset] owner password reset for @${owner.username} (${value.length} characters); sessions ended. Remove the RESET_OWNER_PASSWORD secret now.`)
 }

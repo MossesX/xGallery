@@ -94,6 +94,10 @@ jobs:
             fi
             docker image prune -f >/dev/null
             docker compose ps
+            if [ -n "$RESET_OWNER_PASSWORD" ]; then echo "RESET_OWNER_PASSWORD secret: present (${#RESET_OWNER_PASSWORD} characters)"; else echo "RESET_OWNER_PASSWORD secret: not set"; fi
+            sleep 8
+            echo "Owner reset outcome (from the container log):"
+            docker logs --since 3m xgallery-app 2>&1 | grep '\[reset\]' || echo "  (no [reset] line yet: the app may still be starting)"
       - name: Verify the site answers
         run: |
           echo "DNS for ${SITE_DOMAIN}: $(getent hosts "${SITE_DOMAIN}" | awk '{print $1}' | paste -sd, || echo 'does not resolve')"
