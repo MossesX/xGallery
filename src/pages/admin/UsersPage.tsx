@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Copy, KeyRound, Plus, Sparkles, Trash2, UserX, UserCheck } from 'lucide-react'
+import { Copy, KeyRound, Plus, Search, SlidersHorizontal, Sparkles, Trash2, UserX, UserCheck } from 'lucide-react'
+import { MemberDrawer } from '../../components/MemberDrawer'
 import { api } from '../../api/client'
 import { keys, useGalleries, useMe, useUsers } from '../../api/hooks'
 import type { Role, User } from '../../api/types'
@@ -31,7 +32,23 @@ export function UsersPage() {
   const [generated, setGenerated] = useState<{ username: string; password: string } | null>(null)
   const [form, setForm] = useState({ username: '', displayName: '', password: '', role: 'user' as Role, galleryIds: [] as number[] })
   const [newPassword, setNewPassword] = useState('')
+  const [manageId, setManageId] = useState<number | null>(null)
+  const [q, setQ] = useState('')
+  const [roleFilter, setRoleFilter] = useState<'all' | Role>('all')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'pending' | 'disabled' | 'ai'>('all')
+  const [selected, setSelected] = useState<number[]>([])
   const myGallery = myGalleries?.find((g) => g.isMine)
+  const shown = (users ?? []).filter((u) => {
+    if (roleFilter !== 'all' && u.role !== roleFilter) return false
+    if (statusFilter === 'active' && (u.disabled || u.status !== 'active')) return false
+    if (statusFilter === 'pending' && u.status !== 'pending') return false
+    if (statusFilter === 'disabled' && !u.disabled) return false
+    if (statusFilter === 'ai' && !u.aiEnabled) return false
+    if (q && !`${u.display_name} ${u.username} ${u.bio}`.toLowerCase().includes(q.toLowerCase())) return false
+    return true
+  })
+  const selectable = shown.filter((u) => u.id !== me?.id && u.role !== 'owner').map((u) => u.id)
+  const allSelected = selectable.length > 0 && selectable.every((id) => selected.includes(id))
   const refresh = () => {
     qc.invalidateQueries({ queryKey: keys.users })
     qc.invalidateQueries({ queryKey: ['galleries'] })
@@ -60,6 +77,15 @@ export function UsersPage() {
   const update = useMutation({
     mutationFn: (v: { id: number; patch: Record<string, unknown> }) => api.put(`/api/users/${v.id}`, v.patch),
     onSuccess: refresh,
+    onError: (e: Error) => notify(e.message, 'error'),
+  })
+  const bulk = useMutation({
+    mutationFn: (patch: Record<string, unknown>) => api.post<{ changed: number }>('/api/users/bulk', { ids: selected, patch }),
+    onSuccess: (r) => {
+      refresh()
+      setSelected([])
+      notify(`Updated ${r.changed} account${r.changed === 1 ? '' : 's'}`, 'success')
+    },
     onError: (e: Error) => notify(e.message, 'error'),
   })
   const remove = useMutation({
@@ -92,13 +118,81 @@ export function UsersPage() {
       </div>
       <p className="muted small" style={{ margin: 0 }}>
         {owner
-          ? 'Use the gallery column to choose which galleries each account can see. Admins own one gallery each and manage its albums and members.'
+          ? 'Every account has its own gallery. Use Manage for the full control panel: identity, role, assistant access (admins included), capabilities, gallery access, passwords, sessions and "sign in as". Select rows for bulk actions.'
           : 'Members listed here can see your gallery. Generated members stay pending until they sign in for the first time.'}
       </p>
+      <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+        <label className="feed-search" style={{ minWidth: 240 }}>
+          <Search size={14} />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, login or bio" aria-label="Search members" />
+        </label>
+        {owner && (
+          <>
+            <select className="select" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value as 'all' | Role)} style={{ width: 'auto' }} aria-label="Role filter">
+              <option value="all">All roles</option>
+              <option value="owner">Owner</option>
+              <option value="admin">Administrators</option>
+              <option value="user">Members</option>
+            </select>
+            <select className="select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)} style={{ width: 'auto' }} aria-label="Status filter">
+              <option value="all">Any status</option>
+              <option value="active">Active</option>
+              <option value="pending">Pending</option>
+              <option value="disabled">Disabled</option>
+              <option value="ai">Assistant allowed</option>
+            </select>
+          </>
+        )}
+        <span className="muted small">
+          {shown.length} of {users?.length ?? 0}
+        </span>
+      </div>
+      {owner && selected.length > 0 && (
+        <div className="bulk-bar">
+          <strong>{selected.length} selected</strong>
+          <button className="btn sm" onClick={() => bulk.mutate({ aiEnabled: true })}>
+            <Sparkles size={13} /> Allow assistant
+          </button>
+          <button className="btn sm" onClick={() => bulk.mutate({ aiEnabled: false })}>
+            Revoke assistant
+          </button>
+          <button className="btn sm" onClick={() => bulk.mutate({ role: 'admin' })}>
+            Make admins
+          </button>
+          <button className="btn sm" onClick={() => bulk.mutate({ role: 'user' })}>
+            Make members
+          </button>
+          {myGallery && (
+            <button className="btn sm" onClick={() => bulk.mutate({ grantGalleryIds: [myGallery.id] })}>
+              Grant my gallery
+            </button>
+          )}
+          <button className="btn sm" onClick={() => bulk.mutate({ disabled: true })}>
+            <UserX size={13} /> Disable
+          </button>
+          <button className="btn sm" onClick={() => bulk.mutate({ disabled: false })}>
+            <UserCheck size={13} /> Enable
+          </button>
+          <button className="btn sm" onClick={() => bulk.mutate({ signOut: true })}>
+            Sign out everywhere
+          </button>
+          <button className="btn sm danger" onClick={() => confirm(`Delete ${selected.length} accounts and everything they uploaded?`) && bulk.mutate({ delete: true })}>
+            <Trash2 size={13} /> Delete
+          </button>
+          <button className="btn ghost sm" onClick={() => setSelected([])}>
+            Clear
+          </button>
+        </div>
+      )}
       <div className="card table-card">
         <table className="table">
           <thead>
             <tr>
+              {owner && (
+                <th style={{ width: 28 }}>
+                  <input type="checkbox" aria-label="Select all" checked={allSelected} onChange={(e) => setSelected(e.target.checked ? selectable : [])} />
+                </th>
+              )}
               <th>Member</th>
               <th>Role</th>
               {owner && <th>Galleries</th>}
@@ -109,8 +203,13 @@ export function UsersPage() {
             </tr>
           </thead>
           <tbody>
-            {users?.map((u) => (
-              <tr key={u.id}>
+            {shown.map((u) => (
+              <tr key={u.id} className={selected.includes(u.id) ? 'is-selected' : ''}>
+                {owner && (
+                  <td>
+                    {u.id !== me?.id && u.role !== 'owner' && <input type="checkbox" aria-label={`Select ${u.display_name}`} checked={selected.includes(u.id)} onChange={(e) => setSelected(e.target.checked ? [...selected, u.id] : selected.filter((x) => x !== u.id))} />}
+                  </td>
+                )}
                 <td>
                   <div className="row" style={{ gap: 10 }}>
                     <Avatar name={u.display_name} src={u.avatarUrl} />
@@ -156,6 +255,11 @@ export function UsersPage() {
                 <td className="muted small">{u.last_seen_at ? new Date(u.last_seen_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : 'never'}</td>
                 <td>
                   <div className="row" style={{ justifyContent: 'flex-end', gap: 2 }}>
+                    {owner && (
+                      <button className="btn sm" title="Full account controls" onClick={() => setManageId(u.id)}>
+                        <SlidersHorizontal size={13} /> Manage
+                      </button>
+                    )}
                     <button className="btn ghost icon sm" title="Reset password" onClick={() => setResetFor(u)} disabled={!owner && u.role !== 'user'}>
                       <KeyRound size={14} />
                     </button>
@@ -173,6 +277,7 @@ export function UsersPage() {
         </table>
       </div>
 
+      {owner && <MemberDrawer userId={manageId} galleries={galleryOptions} onClose={() => setManageId(null)} />}
       <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="New member">
         <form
           className="stack"

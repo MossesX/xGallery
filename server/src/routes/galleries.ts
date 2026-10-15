@@ -72,6 +72,7 @@ galleriesRouter.put(
     let pub = g.public_album_id
     if ('publicAlbumId' in b) {
       pub = b.publicAlbumId == null ? null : num(b.publicAlbumId)
+      if (pub != null && !req.user!.perms.canPublish) throw new HttpError(403, 'Your account is not allowed to make albums public. Ask the owner.')
       if (pub != null && !db.prepare('SELECT 1 FROM albums WHERE id = ? AND gallery_id = ?').get(pub, g.id)) throw new HttpError(400, 'Public album must belong to this gallery')
       // Selecting an album as the public hook makes it public.
       if (pub != null) db.prepare("UPDATE albums SET visibility = 'public', updated_at = ? WHERE id = ?").run(now(), pub)

@@ -1,22 +1,39 @@
 import { Router } from 'express'
 import { randomBytes, randomInt } from 'node:crypto'
 import { db, now } from '../db.js'
-import { hashPassword, newSalt, publicUser, requireAdmin, requireOwner } from '../auth.js'
+import { createSession, hashPassword, newSalt, parsePerms, publicUser, requireAdmin, requireOwner, setSessionCookie, type Perms } from '../auth.js'
 import { HttpError, num, str, wrap, IdRow } from '../util.js'
 import { ensureGalleryFor, galleryOf, grantGallery, isOwner, managedGalleryIds } from '../access.js'
 
 export const usersRouter = Router()
 usersRouter.use(requireAdmin)
 
+/** Owner-only: full gallery list for the access matrix. */
+usersRouter.get('/galleries', requireOwner, (_req, res) => {
+  res.json({ galleries: db.prepare('SELECT g.id, g.slug, g.title, u.display_name AS owner FROM galleries g JOIN users u ON u.id = g.owner_user_id ORDER BY g.created_at').all() })
+})
+
 function userJson(r: IdRow) {
   const galleryIds = (db.prepare('SELECT gallery_id FROM gallery_access WHERE user_id = ?').all(r.id) as { gallery_id: number }[]).map((x) => x.gallery_id)
   const own = galleryOf(r.id)
+  const c = (sql: string) => (db.prepare(sql).get(r.id) as { c: number }).c
   return {
     ...publicUser(r),
-    likes: (db.prepare('SELECT COUNT(*) c FROM likes WHERE user_id = ?').get(r.id) as { c: number }).c,
-    comments: (db.prepare('SELECT COUNT(*) c FROM comments WHERE user_id = ?').get(r.id) as { c: number }).c,
+    likes: c('SELECT COUNT(*) c FROM likes WHERE user_id = ?'),
+    comments: c('SELECT COUNT(*) c FROM comments WHERE user_id = ?'),
     galleryIds,
     ownGalleryId: own?.id ?? null,
+    ownGallerySlug: own?.slug ?? null,
+    counts: {
+      albums: own ? (db.prepare('SELECT COUNT(*) c FROM albums WHERE gallery_id = ?').get(own.id) as { c: number }).c : 0,
+      publicAlbums: own ? (db.prepare("SELECT COUNT(*) c FROM albums WHERE gallery_id = ? AND visibility = 'public'").get(own.id) as { c: number }).c : 0,
+      media: own ? (db.prepare('SELECT COUNT(*) c FROM media m JOIN albums a ON a.id = m.album_id WHERE a.gallery_id = ?').get(own.id) as { c: number }).c : 0,
+      bytes: own ? ((db.prepare('SELECT COALESCE(SUM(m.size), 0) s FROM media m JOIN albums a ON a.id = m.album_id WHERE a.gallery_id = ?').get(own.id) as { s: number }).s ?? 0) : 0,
+      messagesSent: c('SELECT COUNT(*) c FROM messages WHERE from_id = ?'),
+      buddies: (db.prepare("SELECT COUNT(*) c FROM buddies WHERE status = 'accepted' AND (user_id = ? OR buddy_id = ?)").get(r.id, r.id) as { c: number }).c,
+      sessions: c('SELECT COUNT(*) c FROM sessions WHERE user_id = ? AND expires_at > ' + now()),
+      aiConversations: c('SELECT COUNT(*) c FROM ai_conversations WHERE user_id = ?'),
+    },
   }
 }
 
@@ -125,8 +142,21 @@ usersRouter.put(
     if (self && disabled) throw new HttpError(400, 'You cannot disable your own account')
     const displayName = str(b.displayName, 80) || (row.display_name as string)
     db.prepare('UPDATE users SET role = ?, disabled = ?, display_name = ? WHERE id = ?').run(role, disabled, displayName, id)
-    // Only the owner decides who may use the AI assistant.
+    // Owner-only account controls: assistant access (any role, admins included), capabilities, login name, bio, status, picture.
     if (owner && typeof b.aiEnabled === 'boolean') db.prepare('UPDATE users SET ai_enabled = ? WHERE id = ?').run(b.aiEnabled ? 1 : 0, id)
+    if (owner && b.perms && typeof b.perms === 'object') {
+      const merged = { ...parsePerms(row.perms), ...parsePerms({ ...parsePerms(row.perms), ...(b.perms as Partial<Perms>) }) }
+      db.prepare('UPDATE users SET perms = ? WHERE id = ?').run(JSON.stringify(merged), id)
+    }
+    if (owner && typeof b.username === 'string' && b.username && b.username !== row.username) {
+      const username = str(b.username, 32).toLowerCase()
+      if (!/^[a-z0-9_.-]{3,32}$/.test(username)) throw new HttpError(400, 'Username must be 3-32 characters: letters, numbers, dot, dash or underscore')
+      if (db.prepare('SELECT 1 FROM users WHERE username = ? AND id <> ?').get(username, id)) throw new HttpError(409, 'That username is already taken')
+      db.prepare('UPDATE users SET username = ? WHERE id = ?').run(username, id)
+    }
+    if (owner && typeof b.bio === 'string') db.prepare('UPDATE users SET bio = ? WHERE id = ?').run(str(b.bio, 400), id)
+    if (owner && (b.status === 'active' || b.status === 'pending')) db.prepare('UPDATE users SET status = ? WHERE id = ?').run(b.status, id)
+    if (owner && b.clearAvatar === true) db.prepare('UPDATE users SET avatar_path = NULL WHERE id = ?').run(id)
     ensureGalleryFor(id, displayName)
     if (typeof b.password === 'string' && b.password) {
       if (b.password.length < 8) throw new HttpError(400, 'Password must be at least 8 characters')
@@ -146,6 +176,79 @@ usersRouter.put(
   }),
 )
 
+/** Owner: one account in full. */
+usersRouter.get(
+  '/:id',
+  requireOwner,
+  wrap((req, res) => {
+    const row = db.prepare('SELECT * FROM users WHERE id = ?').get(Number(req.params.id)) as IdRow | undefined
+    if (!row) throw new HttpError(404, 'User not found')
+    const albums = galleryOf(row.id) ? (db.prepare('SELECT id, slug, title, visibility, updated_at FROM albums WHERE gallery_id = ? ORDER BY updated_at DESC LIMIT 50').all(galleryOf(row.id)!.id) as IdRow[]) : []
+    const recentComments = db.prepare('SELECT id, body, created_at FROM comments WHERE user_id = ? ORDER BY created_at DESC LIMIT 10').all(row.id) as IdRow[]
+    res.json({ user: userJson(row), albums: albums.map((a) => ({ id: a.id, slug: a.slug, title: a.title, visibility: a.visibility, updatedAt: a.updated_at })), recentComments: recentComments.map((c) => ({ id: c.id, body: c.body, createdAt: c.created_at })) })
+  }),
+)
+
+/** Owner: end every session of an account (forces a fresh sign-in everywhere). */
+usersRouter.post(
+  '/:id/signout',
+  requireOwner,
+  wrap((req, res) => {
+    const id = Number(req.params.id)
+    const r = db.prepare('DELETE FROM sessions WHERE user_id = ? AND token <> ?').run(id, id === req.user!.id ? (req.sessionToken ?? '') : '') as { changes: number }
+    res.json({ ok: true, sessions: r.changes })
+  }),
+)
+
+/** Owner: sign in as another account to see exactly what they see; a return cookie brings the owner back. */
+usersRouter.post(
+  '/:id/impersonate',
+  requireOwner,
+  wrap((req, res) => {
+    const id = Number(req.params.id)
+    const row = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as IdRow | undefined
+    if (!row) throw new HttpError(404, 'User not found')
+    if (row.role === 'owner') throw new HttpError(400, 'You are the owner already')
+    if (row.disabled) throw new HttpError(400, 'That account is disabled')
+    const token = createSession(id)
+    setSessionCookie(res, token, req.sessionToken ?? null)
+    res.json({ user: publicUser(row) })
+  }),
+)
+
+/** Owner: apply one change to many accounts at once. */
+usersRouter.post(
+  '/bulk',
+  requireOwner,
+  wrap((req, res) => {
+    const ids: number[] = Array.isArray(req.body?.ids) ? req.body.ids.map(Number).filter((n: number) => Number.isFinite(n) && n !== req.user!.id) : []
+    const b = req.body?.patch ?? {}
+    if (!ids.length) throw new HttpError(400, 'No accounts selected')
+    const marks = ids.map(() => '?').join(',')
+    const owners = new Set((db.prepare(`SELECT id FROM users WHERE role = 'owner' AND id IN (${marks})`).all(...ids) as { id: number }[]).map((r) => r.id))
+    const targets = ids.filter((i) => !owners.has(i))
+    const tm = targets.map(() => '?').join(',')
+    if (!targets.length) throw new HttpError(400, 'Nothing to change')
+    if (typeof b.aiEnabled === 'boolean') db.prepare(`UPDATE users SET ai_enabled = ? WHERE id IN (${tm})`).run(b.aiEnabled ? 1 : 0, ...targets)
+    if (typeof b.disabled === 'boolean') {
+      db.prepare(`UPDATE users SET disabled = ? WHERE id IN (${tm})`).run(b.disabled ? 1 : 0, ...targets)
+      if (b.disabled) db.prepare(`DELETE FROM sessions WHERE user_id IN (${tm})`).run(...targets)
+    }
+    if (b.role === 'admin' || b.role === 'user') db.prepare(`UPDATE users SET role = ? WHERE id IN (${tm})`).run(b.role, ...targets)
+    if (b.perms && typeof b.perms === 'object') {
+      for (const id of targets) {
+        const row = db.prepare('SELECT perms FROM users WHERE id = ?').get(id) as { perms: string }
+        db.prepare('UPDATE users SET perms = ? WHERE id = ?').run(JSON.stringify(parsePerms({ ...parsePerms(row.perms), ...(b.perms as Partial<Perms>) })), id)
+      }
+    }
+    if (Array.isArray(b.grantGalleryIds)) for (const id of targets) for (const g of (b.grantGalleryIds as unknown[]).map(Number)) if (Number.isFinite(g)) grantGallery(id, g)
+    if (Array.isArray(b.revokeGalleryIds)) for (const id of targets) for (const g of (b.revokeGalleryIds as unknown[]).map(Number)) if (Number.isFinite(g) && galleryOf(id)?.id !== g) db.prepare('DELETE FROM gallery_access WHERE user_id = ? AND gallery_id = ?').run(id, g)
+    if (b.signOut === true) db.prepare(`DELETE FROM sessions WHERE user_id IN (${tm})`).run(...targets)
+    if (b.delete === true) db.prepare(`DELETE FROM users WHERE id IN (${tm})`).run(...targets)
+    res.json({ ok: true, changed: targets.length })
+  }),
+)
+
 usersRouter.delete(
   '/:id',
   wrap((req, res) => {
@@ -160,7 +263,3 @@ usersRouter.delete(
   }),
 )
 
-/** Owner-only: full gallery list for the access matrix. */
-usersRouter.get('/galleries', requireOwner, (_req, res) => {
-  res.json({ galleries: db.prepare('SELECT g.id, g.slug, g.title, u.display_name AS owner FROM galleries g JOIN users u ON u.id = g.owner_user_id ORDER BY g.created_at').all() })
-})

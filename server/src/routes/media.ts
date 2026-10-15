@@ -5,7 +5,7 @@ import path from 'node:path'
 import { randomBytes } from 'node:crypto'
 import { pipeline } from 'node:stream/promises'
 import { db, MEDIA_DIR, now } from '../db.js'
-import { requireUser } from '../auth.js'
+import { requirePerm, requireUser } from '../auth.js'
 import { HttpError, num, parseJson, str, wrap, IdRow } from '../util.js'
 import { commentJson, mediaJson } from '../serialize.js'
 import { canManageGallery, canViewAlbum } from '../access.js'
@@ -85,6 +85,7 @@ function requireManage(req: import('express').Request, albumId: number): void {
 mediaRouter.post(
   '/albums/:albumId/media',
   requireUser,
+  requirePerm('canUpload'),
   wrap(async (req, res) => {
     const albumId = Number(req.params.albumId)
     requireManage(req, albumId)
@@ -203,6 +204,7 @@ mediaRouter.post(
 mediaRouter.post(
   '/media/:id/like',
   requireUser,
+  requirePerm('canReact'),
   wrap((req, res) => {
     const row = loadMedia(Number(req.params.id))
     if (!canView(req, row)) throw new HttpError(404, 'Media not found')
@@ -229,6 +231,7 @@ mediaRouter.get(
 mediaRouter.post(
   '/media/:id/comments',
   requireUser,
+  requirePerm('canComment'),
   wrap((req, res) => {
     const row = loadMedia(Number(req.params.id))
     if (!canView(req, row)) throw new HttpError(404, 'Media not found')

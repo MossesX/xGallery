@@ -162,6 +162,7 @@ if (!hasColumn('users', 'status')) db.exec("ALTER TABLE users ADD COLUMN status 
 if (!hasColumn('users', 'created_by')) db.exec('ALTER TABLE users ADD COLUMN created_by INTEGER')
 if (!hasColumn('users', 'avatar_path')) db.exec('ALTER TABLE users ADD COLUMN avatar_path TEXT')
 if (!hasColumn('users', 'ai_enabled')) db.exec('ALTER TABLE users ADD COLUMN ai_enabled INTEGER NOT NULL DEFAULT 0')
+if (!hasColumn('users', 'perms')) db.exec("ALTER TABLE users ADD COLUMN perms TEXT NOT NULL DEFAULT '{}'")
 // v4: owner inbox (account requests, contact messages) and the AI assistant's conversations.
 db.exec(`
 CREATE TABLE IF NOT EXISTS admin_messages (

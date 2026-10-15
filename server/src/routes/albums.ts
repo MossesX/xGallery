@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { randomBytes } from 'node:crypto'
 import { db, now } from '../db.js'
-import { requireUser } from '../auth.js'
+import { requirePerm, requireUser } from '../auth.js'
 import { canManageGallery, canViewAlbum, galleryOf, isOwner, managedGalleryIds, visibleAlbumRows } from '../access.js'
 import { HttpError, bool, num, slugify, str, wrap, IdRow } from '../util.js'
 import { albumJson, commentJson, mediaJson } from '../serialize.js'
@@ -64,6 +64,7 @@ albumsRouter.get(
 albumsRouter.post(
   '/',
   requireUser,
+  requirePerm('canUpload'),
   wrap((req, res) => {
     const title = str(req.body?.title, 120)
     if (!title) throw new HttpError(400, 'Title is required')
@@ -78,6 +79,7 @@ albumsRouter.post(
     const newId = info.lastInsertRowid as number
     // Optionally make the new album the gallery's public album (visible without login, shown first on the public page).
     if (req.body?.makePublic === true) {
+      if (!req.user!.perms.canPublish) throw new HttpError(403, 'Your account is not allowed to make albums public. Ask the owner.')
       db.prepare("UPDATE albums SET visibility = 'public' WHERE id = ?").run(newId)
       db.prepare('UPDATE galleries SET public_album_id = ?, updated_at = ? WHERE id = ?').run(newId, t, galleryId)
     }
@@ -141,6 +143,7 @@ albumsRouter.put(
     const slug = b.slug != null ? uniqueSlug(str(b.slug, 80) || title, id) : (row.slug as string)
     const description = b.description != null ? str(b.description, 2000) : (row.description as string)
     const visibility = b.visibility === 'published' || b.visibility === 'draft' || b.visibility === 'public' ? b.visibility : row.visibility
+    if (visibility === 'public' && row.visibility !== 'public' && !req.user!.perms.canPublish) throw new HttpError(403, 'Your account is not allowed to make albums public. Ask the owner.')
     const tags = Array.isArray(b.tags) ? JSON.stringify(b.tags.map((t: unknown) => str(t, 40)).filter(Boolean).slice(0, 20)) : (row.tags as string)
     const layout = 'layoutOverride' in b ? (b.layoutOverride ? JSON.stringify(b.layoutOverride) : null) : (row.layout_override as string | null)
     const featured = 'featured' in b ? (bool(b.featured) ? 1 : 0) : (row.featured as number)
@@ -198,6 +201,7 @@ albumsRouter.delete(
 albumsRouter.post(
   '/:id/favorite',
   requireUser,
+  requirePerm('canReact'),
   wrap((req, res) => {
     const row = loadAlbum(req, req.params.id as string)
     const existing = db.prepare('SELECT id FROM favorites WHERE user_id = ? AND album_id = ?').get(req.user!.id, row.id)
@@ -222,6 +226,7 @@ albumsRouter.get(
 albumsRouter.post(
   '/:id/comments',
   requireUser,
+  requirePerm('canComment'),
   wrap((req, res) => {
     const row = loadAlbum(req, req.params.id as string)
     const body = str(req.body?.body, 2000)

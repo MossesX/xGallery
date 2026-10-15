@@ -9,6 +9,7 @@ export interface User {
   bio: string
   avatarUrl: string | null
   aiEnabled: boolean
+  perms: Perms
   created_at: number
   last_seen_at: number | null
   status: 'active' | 'pending'
@@ -17,6 +18,23 @@ export interface User {
   comments?: number
   galleryIds?: number[]
   ownGalleryId?: number | null
+  ownGallerySlug?: string | null
+  counts?: { albums: number; publicAlbums: number; media: number; bytes: number; messagesSent: number; buddies: number; sessions: number; aiConversations: number }
+}
+
+/** Owner-controlled capabilities; everything is on by default. */
+export interface Perms {
+  canUpload: boolean
+  canPublish: boolean
+  canComment: boolean
+  canReact: boolean
+  canMessage: boolean
+  canBuddies: boolean
+}
+
+export interface Session {
+  user: User | null
+  viewingAs: { owner: { id: number; displayName: string } } | null
 }
 
 export interface Palette {

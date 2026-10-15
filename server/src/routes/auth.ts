@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { db, now } from '../db.js'
-import { createSession, destroySession, hashPassword, newSalt, publicUser, requireUser, setSessionCookie, verifyPassword } from '../auth.js'
+import { createSession, destroySession, hashPassword, newSalt, publicUser, requireUser, returningOwner, setSessionCookie, verifyPassword } from '../auth.js'
 import { HttpError, str, wrap, IdRow } from '../util.js'
 
 export const authRouter = Router()
@@ -26,14 +26,27 @@ authRouter.post(
   '/logout',
   wrap((req, res) => {
     if (req.sessionToken) destroySession(req.sessionToken)
-    setSessionCookie(res, null)
+    setSessionCookie(res, null, null)
     res.json({ ok: true })
   }),
 )
 
 authRouter.get('/me', (req, res) => {
-  res.json({ user: req.user ?? null })
+  const ret = req.user ? returningOwner(req) : null
+  res.json({ user: req.user ?? null, viewingAs: ret && ret.user.id !== req.user!.id ? { owner: { id: ret.user.id, displayName: ret.user.display_name } } : null })
 })
+
+/** Owner: leave a "sign in as" session and return to their own account. */
+authRouter.post(
+  '/return',
+  wrap((req, res) => {
+    const ret = returningOwner(req)
+    if (!ret) throw new HttpError(400, 'Not viewing as anyone')
+    if (req.sessionToken && req.sessionToken !== ret.token) destroySession(req.sessionToken)
+    setSessionCookie(res, ret.token, null)
+    res.json({ user: ret.user })
+  }),
+)
 
 authRouter.put(
   '/profile',

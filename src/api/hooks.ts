@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
-import type { AiConversation, AiMessage, AiSettingsView, AiStatus, Album, BuddyLists, Comment, Conversation, Gallery, InboxItem, MediaItem, Message, Person, PublicFeed, SiteSettings, Stats, Theme, ThemeDraft, Unread, User } from './types'
+import type { AiConversation, AiMessage, AiSettingsView, AiStatus, Album, BuddyLists, Comment, Conversation, Gallery, InboxItem, MediaItem, Message, Person, PublicFeed, Session, SiteSettings, Stats, Theme, ThemeDraft, Unread, User } from './types'
 
 export const keys = {
   me: ['me'] as const,
@@ -20,6 +20,11 @@ export const keys = {
 
 export function useMe() {
   return useQuery({ queryKey: keys.me, queryFn: () => api.get<{ user: User | null }>('/api/auth/me').then((r) => r.user), staleTime: 60_000 })
+}
+
+/** The whole /me payload, including whether the owner is signed in as someone else. */
+export function useSession(enabled = true) {
+  return useQuery({ queryKey: ['session'], queryFn: () => api.get<Session>('/api/auth/me'), enabled, staleTime: 60_000 })
 }
 
 export function useSettings() {

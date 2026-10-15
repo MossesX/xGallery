@@ -3,7 +3,7 @@ import { createWriteStream, existsSync, mkdirSync, unlinkSync } from 'node:fs'
 import path from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import { db, MEDIA_DIR, now } from '../db.js'
-import { avatarUrlFor, publicUser, requireUser } from '../auth.js'
+import { avatarUrlFor, publicUser, requirePerm, requireUser } from '../auth.js'
 import { HttpError, str, wrap, IdRow } from '../util.js'
 import { areBuddies, galleryOf } from '../access.js'
 
@@ -136,6 +136,7 @@ socialRouter.get(
 socialRouter.post(
   '/buddies/:id',
   requireUser,
+  requirePerm('canBuddies'),
   wrap((req, res) => {
     const me = req.user!.id
     const other = Number(req.params.id)
@@ -239,6 +240,7 @@ socialRouter.get(
 socialRouter.post(
   '/messages/:id',
   requireUser,
+  requirePerm('canMessage'),
   wrap((req, res) => {
     const me = req.user!.id
     const other = Number(req.params.id)

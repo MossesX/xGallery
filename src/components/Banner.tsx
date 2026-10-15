@@ -1,7 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, NavLink, useNavigate, useSearchParams } from 'react-router-dom'
-import { Bookmark, LogIn, LogOut, MessageCircle, Search, Settings2, Sparkles, UserPlus } from 'lucide-react'
-import { useAiStatus, useLogout, useMe, useSettings, useUnread } from '../api/hooks'
+import { Bookmark, Eye, LogIn, LogOut, MessageCircle, Search, Settings2, Sparkles, UserPlus } from 'lucide-react'
+import { useAiStatus, useLogout, useMe, useSession, useSettings, useUnread } from '../api/hooks'
+import { useQueryClient } from '@tanstack/react-query'
+import { api } from '../api/client'
 import { ColorModeToggle } from './ColorModeToggle'
 import { useUI } from '../store/ui'
 import { AmberMark } from '../brand/Logo'
@@ -26,6 +28,9 @@ export function Banner() {
   const { data: user } = useMe()
   const { data: unread } = useUnread(!!user)
   const { data: ai } = useAiStatus(!!user)
+  const { data: session } = useSession(!!user)
+  const qc = useQueryClient()
+  const returnToOwner = () => api.post('/api/auth/return', {}).then(() => { qc.clear(); window.location.assign('/admin/users') })
   const openAssistant = useUI((s) => s.openAssistant)
   const { data } = useSettings()
   const logout = useLogout()
@@ -42,6 +47,14 @@ export function Banner() {
 
   return (
     <header className="banner">
+      {session?.viewingAs && user && (
+        <div className="viewing-bar">
+          <Eye size={13} /> Viewing as <strong>{user.display_name}</strong> (@{user.username}) · what they see is what you see
+          <button className="btn sm" onClick={returnToOwner}>
+            Return to {session.viewingAs.owner.displayName}
+          </button>
+        </div>
+      )}
       <div className="banner-inner">
         <Link to="/" className="banner-brand" aria-label={s?.brandName ?? 'AmberX'}>
           <span className="banner-logo">
