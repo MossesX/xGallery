@@ -30,6 +30,9 @@ export function galleryJson(g: GalleryRow, userId?: number) {
     isMine: userId != null && g.owner_user_id === userId,
     splash: splash ? mediaJson(splash) : null,
     splashMediaId: g.splash_media_id,
+    coverUrl: g.cover_path ? `/api/galleries/${g.id}/cover?v=${encodeURIComponent(g.cover_path.replace(/^.*[/\\]/, ''))}` : null,
+    isPrimary: !!g.is_primary,
+    sortOrder: g.sort_order,
     themeId: g.theme_id,
     publicAlbumId: g.public_album_id,
     publicAlbum: publicAlbum ?? null,
@@ -84,6 +87,8 @@ export function mediaJson(row: Record<string, unknown>, userId?: number, urlSuff
   const likes = (db.prepare('SELECT COUNT(*) c FROM likes WHERE media_id = ?').get(id) as { c: number }).c
   const comments = (db.prepare('SELECT COUNT(*) c FROM comments WHERE media_id = ?').get(id) as { c: number }).c
   const liked = userId != null ? !!db.prepare('SELECT 1 FROM likes WHERE user_id = ? AND media_id = ?').get(userId, id) : false
+  const reactionRows = db.prepare('SELECT emoji, COUNT(*) c FROM reactions WHERE media_id = ? GROUP BY emoji ORDER BY c DESC').all(id) as { emoji: string; c: number }[]
+  const myReaction = userId != null ? ((db.prepare('SELECT emoji FROM reactions WHERE user_id = ? AND media_id = ?').get(userId, id) as { emoji: string } | undefined)?.emoji ?? null) : null
   return {
     id,
     albumId: row.album_id,
@@ -103,6 +108,8 @@ export function mediaJson(row: Record<string, unknown>, userId?: number, urlSuff
     likes,
     comments,
     liked,
+    reactions: reactionRows.map((r) => ({ emoji: r.emoji, count: r.c })),
+    myReaction,
   }
 }
 

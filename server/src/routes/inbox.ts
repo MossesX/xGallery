@@ -5,6 +5,8 @@ import { hashPassword, newSalt, publicUser, requireOwner, requireUser } from '..
 import { HttpError, str, wrap, IdRow } from '../util.js'
 import { ensureGalleryFor, grantGallery, galleryOf } from '../access.js'
 import { track, logActivity } from '../activity.js'
+import { notifyOwner } from '../notifications.js'
+import { getPolicy } from '../policy.js'
 
 /**
  * The owner's inbox: account requests from visitors and contact messages from members. Separate
@@ -46,6 +48,7 @@ inboxRouter.post(
   '/request',
   wrap((req, res) => {
     throttle(req.ip ?? 'unknown')
+    if (!getPolicy().acceptRequests) throw new HttpError(403, 'Account requests are closed at the moment')
     const name = str(req.body?.name, 80).trim()
     const username = str(req.body?.username, 32).trim().toLowerCase()
     const email = str(req.body?.email, 160).trim().toLowerCase()
@@ -59,6 +62,7 @@ inboxRouter.post(
     const contact = [email, phone].filter(Boolean).join(' · ')
     const info = db.prepare("INSERT INTO admin_messages(kind, from_user_id, name, contact, username_wanted, body, status, created_at) VALUES ('account_request', ?, ?, ?, ?, ?, 'open', ?)").run(req.user?.id ?? null, name, contact, username, body, now())
     logActivity({ userId: req.user?.id ?? null, kind: 'inbox.account_request', targetType: 'inbox', targetId: info.lastInsertRowid as number, targetLabel: name, ip: req.ip ?? '', detail: { email, phone, username } })
+    notifyOwner({ kind: 'inbox.account_request', title: `Account request from ${name}`, body: [email, phone].filter(Boolean).join(' · '), data: { inboxId: info.lastInsertRowid, email, phone, username } })
     res.status(201).json({ ok: true })
   }),
 )
@@ -71,6 +75,7 @@ inboxRouter.post(
     if (!body) throw new HttpError(400, 'Message is empty')
     db.prepare("INSERT INTO admin_messages(kind, from_user_id, name, contact, body, status, created_at) VALUES ('contact', ?, ?, ?, ?, 'open', ?)").run(req.user!.id, req.user!.display_name, `@${req.user!.username}`, body, now())
     track(req, 'inbox.contact', { detail: { length: body.length } })
+    notifyOwner({ kind: 'inbox.contact', title: `${req.user!.display_name} wrote to you`, body: body.slice(0, 200), actorId: req.user!.id })
     res.status(201).json({ ok: true })
   }),
 )
@@ -128,8 +133,8 @@ inboxRouter.put(
       const salt = newSalt()
       const role = req.body?.role === 'admin' ? 'admin' : 'user'
       const info = db
-        .prepare("INSERT INTO users(username, display_name, role, password_hash, salt, created_at, status, created_by) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)")
-        .run(candidate, (row.name as string) || candidate, role, hashPassword(password, salt), salt, now(), req.user!.id)
+        .prepare("INSERT INTO users(username, display_name, role, password_hash, salt, created_at, status, created_by, must_change_password, email, phone) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)")
+        .run(candidate, (row.name as string) || candidate, role, hashPassword(password, salt), salt, now(), req.user!.id, getPolicy().forcePasswordChange ? 1 : 0, /@/.test(String(row.contact)) ? String(row.contact).split(' · ').find((x) => x.includes('@')) ?? '' : '', String(row.contact).split(' · ').find((x) => !x.includes('@')) ?? '')
       const uid = info.lastInsertRowid as number
       ensureGalleryFor(uid, (row.name as string) || candidate)
       const og = galleryOf(req.user!.id)

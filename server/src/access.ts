@@ -10,8 +10,11 @@ export interface GalleryRow {
   tagline: string
   headline: string
   splash_media_id: number | null
+  cover_path: string | null
   theme_id: number | null
   public_album_id: number | null
+  is_primary: number
+  sort_order: number
   created_at: number
   updated_at: number
 }
@@ -28,8 +31,18 @@ export function galleryById(id: number): GalleryRow | undefined {
   return db.prepare('SELECT * FROM galleries WHERE id = ?').get(id) as GalleryRow | undefined
 }
 
+/** The account's primary gallery (every account has one). */
 export function galleryOf(userId: number): GalleryRow | undefined {
-  return db.prepare('SELECT * FROM galleries WHERE owner_user_id = ?').get(userId) as GalleryRow | undefined
+  return db.prepare('SELECT * FROM galleries WHERE owner_user_id = ? ORDER BY is_primary DESC, sort_order, id LIMIT 1').get(userId) as GalleryRow | undefined
+}
+
+/** Every gallery the account owns, primary first. */
+export function galleriesOf(userId: number): GalleryRow[] {
+  return db.prepare('SELECT * FROM galleries WHERE owner_user_id = ? ORDER BY is_primary DESC, sort_order, id').all(userId) as unknown as GalleryRow[]
+}
+
+export function uniqueGallerySlugFor(base: string): string {
+  return uniqueGallerySlug(base)
 }
 
 function uniqueGallerySlug(base: string): string {
@@ -46,7 +59,7 @@ export function ensureGalleryFor(userId: number, displayName: string): GalleryRo
   if (existing) return existing
   const t = now()
   const title = displayName
-  db.prepare('INSERT INTO galleries(owner_user_id, slug, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run(userId, uniqueGallerySlug(displayName), title, t, t)
+  db.prepare('INSERT INTO galleries(owner_user_id, slug, title, is_primary, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?)').run(userId, uniqueGallerySlug(displayName), title, t, t)
   grantGallery(userId, galleryOf(userId)!.id)
   return galleryOf(userId)!
 }
@@ -118,11 +131,10 @@ export function grantedGalleryIds(u: User): number[] {
   return rows.map((r) => r.id)
 }
 
-/** Gallery ids the user may manage. */
+/** Gallery ids the user may manage: everything for the owner, all owned galleries otherwise. */
 export function managedGalleryIds(u: User): number[] {
   if (isOwner(u)) return (db.prepare('SELECT id FROM galleries').all() as { id: number }[]).map((r) => r.id)
-  const g = galleryOf(u.id)
-  return g ? [g.id] : []
+  return galleriesOf(u.id).map((g) => g.id)
 }
 
 /**

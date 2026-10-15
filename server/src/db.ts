@@ -177,6 +177,83 @@ CREATE TABLE IF NOT EXISTS album_links (
 CREATE INDEX IF NOT EXISTS album_links_album ON album_links(album_id);
 `)
 if (!hasColumn('users', 'perms')) db.exec("ALTER TABLE users ADD COLUMN perms TEXT NOT NULL DEFAULT '{}'")
+// v6: many galleries per account (named, with a cover, one primary), groups with layered policy,
+// per-account limits/overrides, forced password change, notifications.
+if (!hasColumn('users', 'limits')) db.exec("ALTER TABLE users ADD COLUMN limits TEXT NOT NULL DEFAULT '{}'")
+if (!hasColumn('users', 'must_change_password')) db.exec('ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0')
+if (!hasColumn('users', 'email')) db.exec("ALTER TABLE users ADD COLUMN email TEXT NOT NULL DEFAULT ''")
+if (!hasColumn('users', 'phone')) db.exec("ALTER TABLE users ADD COLUMN phone TEXT NOT NULL DEFAULT ''")
+if (!hasColumn('galleries', 'is_primary')) {
+  // Drop the one-gallery-per-owner constraint by rebuilding the table.
+  db.exec(`
+CREATE TABLE galleries_v6 (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  owner_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  slug TEXT NOT NULL UNIQUE,
+  title TEXT NOT NULL,
+  tagline TEXT NOT NULL DEFAULT '',
+  headline TEXT NOT NULL DEFAULT '',
+  splash_media_id INTEGER,
+  cover_path TEXT,
+  theme_id INTEGER,
+  public_album_id INTEGER,
+  is_primary INTEGER NOT NULL DEFAULT 0,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+INSERT INTO galleries_v6(id, owner_user_id, slug, title, tagline, headline, splash_media_id, theme_id, public_album_id, is_primary, created_at, updated_at)
+  SELECT id, owner_user_id, slug, title, tagline, headline, splash_media_id, theme_id, public_album_id, 1, created_at, updated_at FROM galleries;
+DROP TABLE galleries;
+ALTER TABLE galleries_v6 RENAME TO galleries;
+CREATE INDEX IF NOT EXISTS galleries_owner ON galleries(owner_user_id);
+`)
+}
+db.exec(`
+CREATE TABLE IF NOT EXISTS groups (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE,
+  description TEXT NOT NULL DEFAULT '',
+  perms TEXT NOT NULL DEFAULT '{}',
+  limits TEXT NOT NULL DEFAULT '{}',
+  priority INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS group_members (
+  group_id INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (group_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS notifications (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL DEFAULT '',
+  data TEXT NOT NULL DEFAULT '{}',
+  actor_id INTEGER,
+  read_at INTEGER,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS notifications_user ON notifications(user_id, read_at, created_at);
+CREATE INDEX IF NOT EXISTS notifications_kind ON notifications(kind, created_at);
+CREATE TABLE IF NOT EXISTS album_collaborators (
+  album_id INTEGER NOT NULL REFERENCES albums(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (album_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS reactions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  media_id INTEGER NOT NULL REFERENCES media(id) ON DELETE CASCADE,
+  emoji TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  UNIQUE(user_id, media_id)
+);
+CREATE INDEX IF NOT EXISTS reactions_media ON reactions(media_id);
+`)
 // v4: owner inbox (account requests, contact messages) and the AI assistant's conversations.
 db.exec(`
 CREATE TABLE IF NOT EXISTS admin_messages (

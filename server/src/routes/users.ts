@@ -1,7 +1,9 @@
 import { Router } from 'express'
 import { randomBytes, randomInt } from 'node:crypto'
 import { db, now } from '../db.js'
-import { createSession, hashPassword, newSalt, parsePerms, publicUser, requireAdmin, requireOwner, setSessionCookie, type Perms } from '../auth.js'
+import { createSession, hashPassword, newSalt, publicUser, requireAdmin, requireOwner, setSessionCookie } from '../auth.js'
+import { LIMIT_KEYS, PERM_KEYS, parseLimitOverrides, parsePermOverrides, resolveEffective, getPolicy } from '../policy.js'
+import { galleriesOf } from '../access.js'
 import { HttpError, num, str, wrap, IdRow } from '../util.js'
 import { ensureGalleryFor, galleryOf, grantGallery, isOwner, managedGalleryIds } from '../access.js'
 import { track } from '../activity.js'
@@ -18,18 +20,25 @@ function userJson(r: IdRow) {
   const galleryIds = (db.prepare('SELECT gallery_id FROM gallery_access WHERE user_id = ?').all(r.id) as { gallery_id: number }[]).map((x) => x.gallery_id)
   const own = galleryOf(r.id)
   const c = (sql: string) => (db.prepare(sql).get(r.id) as { c: number }).c
+  const eff = resolveEffective({ id: r.id, role: r.role as string, perms: r.perms, limits: r.limits, ai_enabled: r.ai_enabled })
   return {
     ...publicUser(r),
+    permOverrides: parsePermOverrides(r.perms),
+    limitOverrides: parseLimitOverrides(r.limits),
+    permSources: eff.permSources,
+    limitSources: eff.limitSources,
+    galleries: galleriesOf(r.id).map((g) => ({ id: g.id, slug: g.slug, title: g.title, isPrimary: !!g.is_primary })),
     likes: c('SELECT COUNT(*) c FROM likes WHERE user_id = ?'),
     comments: c('SELECT COUNT(*) c FROM comments WHERE user_id = ?'),
     galleryIds,
     ownGalleryId: own?.id ?? null,
     ownGallerySlug: own?.slug ?? null,
     counts: {
-      albums: own ? (db.prepare('SELECT COUNT(*) c FROM albums WHERE gallery_id = ?').get(own.id) as { c: number }).c : 0,
-      publicAlbums: own ? (db.prepare("SELECT COUNT(*) c FROM albums WHERE gallery_id = ? AND visibility = 'public'").get(own.id) as { c: number }).c : 0,
-      media: own ? (db.prepare('SELECT COUNT(*) c FROM media m JOIN albums a ON a.id = m.album_id WHERE a.gallery_id = ?').get(own.id) as { c: number }).c : 0,
-      bytes: own ? ((db.prepare('SELECT COALESCE(SUM(m.size), 0) s FROM media m JOIN albums a ON a.id = m.album_id WHERE a.gallery_id = ?').get(own.id) as { s: number }).s ?? 0) : 0,
+      albums: (db.prepare('SELECT COUNT(*) c FROM albums a JOIN galleries g ON g.id = a.gallery_id WHERE g.owner_user_id = ?').get(r.id) as { c: number }).c,
+      publicAlbums: (db.prepare("SELECT COUNT(*) c FROM albums a JOIN galleries g ON g.id = a.gallery_id WHERE g.owner_user_id = ? AND a.visibility = 'public'").get(r.id) as { c: number }).c,
+      media: (db.prepare('SELECT COUNT(*) c FROM media m JOIN albums a ON a.id = m.album_id JOIN galleries g ON g.id = a.gallery_id WHERE g.owner_user_id = ?').get(r.id) as { c: number }).c,
+      bytes: ((db.prepare('SELECT COALESCE(SUM(m.size), 0) s FROM media m JOIN albums a ON a.id = m.album_id JOIN galleries g ON g.id = a.gallery_id WHERE g.owner_user_id = ?').get(r.id) as { s: number }).s ?? 0),
+      galleries: galleriesOf(r.id).length,
       messagesSent: c('SELECT COUNT(*) c FROM messages WHERE from_id = ?'),
       buddies: (db.prepare("SELECT COUNT(*) c FROM buddies WHERE status = 'accepted' AND (user_id = ? OR buddy_id = ?)").get(r.id, r.id) as { c: number }).c,
       sessions: c('SELECT COUNT(*) c FROM sessions WHERE user_id = ? AND expires_at > ' + now()),
@@ -52,12 +61,16 @@ usersRouter.get(
   }),
 )
 
-function insertUser(v: { username: string; displayName: string; role: string; password: string; status: string; createdBy: number }): IdRow {
+function insertUser(v: { username: string; displayName: string; role: string; password: string; status: string; createdBy: number; email?: string; phone?: string }): IdRow {
   const salt = newSalt()
   const info = db
-    .prepare('INSERT INTO users(username, display_name, role, password_hash, salt, created_at, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-    .run(v.username, v.displayName, v.role, hashPassword(v.password, salt), salt, now(), v.status, v.createdBy)
+    .prepare('INSERT INTO users(username, display_name, role, password_hash, salt, created_at, status, created_by, email, phone) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(v.username, v.displayName, v.role, hashPassword(v.password, salt), salt, now(), v.status, v.createdBy, v.email ?? '', v.phone ?? '')
   const row = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid as number) as IdRow
+  const policy = getPolicy()
+  if (policy.forcePasswordChange) db.prepare('UPDATE users SET must_change_password = 1 WHERE id = ?').run(row.id)
+  for (const g of policy.defaultGroupIds) db.prepare('INSERT OR IGNORE INTO group_members(group_id, user_id, created_at) VALUES (?, ?, ?)').run(g, row.id, now())
+  if (v.email || v.phone) db.prepare('UPDATE users SET email = ?, phone = ? WHERE id = ?').run(v.email ?? '', v.phone ?? '', row.id)
   ensureGalleryFor(row.id, v.displayName)
   return row
 }
@@ -72,7 +85,7 @@ usersRouter.post(
     if (!/^[a-z0-9_.-]{3,32}$/.test(username)) throw new HttpError(400, 'Username must be 3-32 characters: letters, numbers, dot, dash or underscore')
     if (password.length < 8) throw new HttpError(400, 'Password must be at least 8 characters')
     if (db.prepare('SELECT 1 FROM users WHERE username = ?').get(username)) throw new HttpError(409, 'That username is already taken')
-    const row = insertUser({ username, displayName, role, password, status: 'active', createdBy: req.user!.id })
+    const row = insertUser({ username, displayName, role, password, status: 'active', createdBy: req.user!.id, email: str(req.body?.email, 160).trim().toLowerCase(), phone: str(req.body?.phone, 40).trim() })
     const galleryIds: number[] = Array.isArray(req.body?.galleryIds) ? req.body.galleryIds.map(Number) : []
     const allowed = new Set(managedGalleryIds(req.user!))
     const grants = isOwner(req.user) ? galleryIds : galleryIds.filter((g) => allowed.has(g))
@@ -146,10 +159,38 @@ usersRouter.put(
     const displayName = str(b.displayName, 80) || (row.display_name as string)
     db.prepare('UPDATE users SET role = ?, disabled = ?, display_name = ? WHERE id = ?').run(role, disabled, displayName, id)
     // Owner-only account controls: assistant access (any role, admins included), capabilities, login name, bio, status, picture.
-    if (owner && typeof b.aiEnabled === 'boolean') db.prepare('UPDATE users SET ai_enabled = ? WHERE id = ?').run(b.aiEnabled ? 1 : 0, id)
+    if (owner && typeof b.aiEnabled === 'boolean') {
+      // The assistant switch is the canUseAssistant override; the legacy column mirrors it.
+      const cur = parsePermOverrides(row.perms)
+      db.prepare('UPDATE users SET ai_enabled = ?, perms = ? WHERE id = ?').run(b.aiEnabled ? 1 : 0, JSON.stringify({ ...cur, canUseAssistant: b.aiEnabled }), id)
+    }
     if (owner && b.perms && typeof b.perms === 'object') {
-      const merged = { ...parsePerms(row.perms), ...parsePerms({ ...parsePerms(row.perms), ...(b.perms as Partial<Perms>) }) }
-      db.prepare('UPDATE users SET perms = ? WHERE id = ?').run(JSON.stringify(merged), id)
+      // Each key: true/false = override, null = inherit from group/site defaults.
+      const cur = parsePermOverrides(db.prepare('SELECT perms FROM users WHERE id = ?').get(id) as { perms: string } | undefined ? (db.prepare('SELECT perms FROM users WHERE id = ?').get(id) as { perms: string }).perms : row.perms)
+      const next: Record<string, boolean> = { ...cur }
+      for (const k of PERM_KEYS) {
+        const v = (b.perms as Record<string, unknown>)[k]
+        if (v === null) delete next[k]
+        else if (typeof v === 'boolean') next[k] = v
+      }
+      db.prepare('UPDATE users SET perms = ?, ai_enabled = ? WHERE id = ?').run(JSON.stringify(next), next.canUseAssistant === true ? 1 : next.canUseAssistant === false ? 0 : (row.ai_enabled as number), id)
+    }
+    if (owner && b.limits && typeof b.limits === 'object') {
+      const cur = parseLimitOverrides(row.limits)
+      const next: Record<string, number> = { ...cur }
+      for (const k of LIMIT_KEYS) {
+        const v = (b.limits as Record<string, unknown>)[k]
+        if (v === null) delete next[k]
+        else if (typeof v === 'number' && Number.isFinite(v)) next[k] = Math.max(0, Math.floor(v))
+      }
+      db.prepare('UPDATE users SET limits = ? WHERE id = ?').run(JSON.stringify(next), id)
+    }
+    if (owner && typeof b.email === 'string') db.prepare('UPDATE users SET email = ? WHERE id = ?').run(str(b.email, 160).trim().toLowerCase(), id)
+    if (owner && typeof b.phone === 'string') db.prepare('UPDATE users SET phone = ? WHERE id = ?').run(str(b.phone, 40).trim(), id)
+    if (owner && typeof b.mustChangePassword === 'boolean') db.prepare('UPDATE users SET must_change_password = ? WHERE id = ?').run(b.mustChangePassword ? 1 : 0, id)
+    if (owner && Array.isArray(b.groupIds)) {
+      db.prepare('DELETE FROM group_members WHERE user_id = ?').run(id)
+      for (const g of (b.groupIds as unknown[]).map(Number)) if (Number.isFinite(g)) db.prepare('INSERT OR IGNORE INTO group_members(group_id, user_id, created_at) VALUES (?, ?, ?)').run(g, id, now())
     }
     if (owner && typeof b.username === 'string' && b.username && b.username !== row.username) {
       const username = str(b.username, 32).toLowerCase()
@@ -164,7 +205,7 @@ usersRouter.put(
     if (typeof b.password === 'string' && b.password) {
       if (b.password.length < 8) throw new HttpError(400, 'Password must be at least 8 characters')
       const salt = newSalt()
-      db.prepare("UPDATE users SET salt = ?, password_hash = ?, status = 'pending' WHERE id = ?").run(salt, hashPassword(b.password, salt), id)
+      db.prepare("UPDATE users SET salt = ?, password_hash = ?, status = 'pending', must_change_password = ? WHERE id = ?").run(salt, hashPassword(b.password, salt), getPolicy().forcePasswordChange ? 1 : 0, id)
       db.prepare('DELETE FROM sessions WHERE user_id = ?').run(id)
     }
     if (disabled) db.prepare('DELETE FROM sessions WHERE user_id = ?').run(id)
@@ -188,9 +229,10 @@ usersRouter.get(
   wrap((req, res) => {
     const row = db.prepare('SELECT * FROM users WHERE id = ?').get(Number(req.params.id)) as IdRow | undefined
     if (!row) throw new HttpError(404, 'User not found')
-    const albums = galleryOf(row.id) ? (db.prepare('SELECT id, slug, title, visibility, updated_at FROM albums WHERE gallery_id = ? ORDER BY updated_at DESC LIMIT 50').all(galleryOf(row.id)!.id) as IdRow[]) : []
+    const gids = galleriesOf(row.id).map((g) => g.id)
+    const albums = gids.length ? (db.prepare(`SELECT a.id, a.slug, a.title, a.visibility, a.updated_at, a.gallery_id, g.title AS gallery_title, (SELECT COUNT(*) FROM media m WHERE m.album_id = a.id) AS media_count FROM albums a JOIN galleries g ON g.id = a.gallery_id WHERE a.gallery_id IN (${gids.map(() => '?').join(',')}) ORDER BY a.updated_at DESC LIMIT 200`).all(...gids) as IdRow[]) : []
     const recentComments = db.prepare('SELECT id, body, created_at FROM comments WHERE user_id = ? ORDER BY created_at DESC LIMIT 10').all(row.id) as IdRow[]
-    res.json({ user: userJson(row), albums: albums.map((a) => ({ id: a.id, slug: a.slug, title: a.title, visibility: a.visibility, updatedAt: a.updated_at })), recentComments: recentComments.map((c) => ({ id: c.id, body: c.body, createdAt: c.created_at })) })
+    res.json({ user: userJson(row), albums: albums.map((a) => ({ id: a.id, slug: a.slug, title: a.title, visibility: a.visibility, updatedAt: a.updated_at, galleryId: a.gallery_id, galleryTitle: a.gallery_title, mediaCount: a.media_count })), recentComments: recentComments.map((c) => ({ id: c.id, body: c.body, createdAt: c.created_at })) })
   }),
 )
 
@@ -236,7 +278,12 @@ usersRouter.post(
     const targets = ids.filter((i) => !owners.has(i))
     const tm = targets.map(() => '?').join(',')
     if (!targets.length) throw new HttpError(400, 'Nothing to change')
-    if (typeof b.aiEnabled === 'boolean') db.prepare(`UPDATE users SET ai_enabled = ? WHERE id IN (${tm})`).run(b.aiEnabled ? 1 : 0, ...targets)
+    if (typeof b.aiEnabled === 'boolean') {
+      for (const id of targets) {
+        const row = db.prepare('SELECT perms FROM users WHERE id = ?').get(id) as { perms: string }
+        db.prepare('UPDATE users SET ai_enabled = ?, perms = ? WHERE id = ?').run(b.aiEnabled ? 1 : 0, JSON.stringify({ ...parsePermOverrides(row.perms), canUseAssistant: b.aiEnabled }), id)
+      }
+    }
     if (typeof b.disabled === 'boolean') {
       db.prepare(`UPDATE users SET disabled = ? WHERE id IN (${tm})`).run(b.disabled ? 1 : 0, ...targets)
       if (b.disabled) db.prepare(`DELETE FROM sessions WHERE user_id IN (${tm})`).run(...targets)
@@ -245,9 +292,29 @@ usersRouter.post(
     if (b.perms && typeof b.perms === 'object') {
       for (const id of targets) {
         const row = db.prepare('SELECT perms FROM users WHERE id = ?').get(id) as { perms: string }
-        db.prepare('UPDATE users SET perms = ? WHERE id = ?').run(JSON.stringify(parsePerms({ ...parsePerms(row.perms), ...(b.perms as Partial<Perms>) })), id)
+        const next: Record<string, boolean> = { ...parsePermOverrides(row.perms) }
+        for (const k of PERM_KEYS) {
+          const v = (b.perms as Record<string, unknown>)[k]
+          if (v === null) delete next[k]
+          else if (typeof v === 'boolean') next[k] = v
+        }
+        db.prepare('UPDATE users SET perms = ? WHERE id = ?').run(JSON.stringify(next), id)
       }
     }
+    if (b.limits && typeof b.limits === 'object') {
+      for (const id of targets) {
+        const row = db.prepare('SELECT limits FROM users WHERE id = ?').get(id) as { limits: string }
+        const next: Record<string, number> = { ...parseLimitOverrides(row.limits) }
+        for (const k of LIMIT_KEYS) {
+          const v = (b.limits as Record<string, unknown>)[k]
+          if (v === null) delete next[k]
+          else if (typeof v === 'number' && Number.isFinite(v)) next[k] = Math.max(0, Math.floor(v))
+        }
+        db.prepare('UPDATE users SET limits = ? WHERE id = ?').run(JSON.stringify(next), id)
+      }
+    }
+    if (typeof b.addGroupId === 'number') for (const id of targets) db.prepare('INSERT OR IGNORE INTO group_members(group_id, user_id, created_at) VALUES (?, ?, ?)').run(b.addGroupId, id, now())
+    if (typeof b.removeGroupId === 'number') for (const id of targets) db.prepare('DELETE FROM group_members WHERE group_id = ? AND user_id = ?').run(b.removeGroupId, id)
     if (Array.isArray(b.grantGalleryIds)) for (const id of targets) for (const g of (b.grantGalleryIds as unknown[]).map(Number)) if (Number.isFinite(g)) grantGallery(id, g)
     if (Array.isArray(b.revokeGalleryIds)) for (const id of targets) for (const g of (b.revokeGalleryIds as unknown[]).map(Number)) if (Number.isFinite(g) && galleryOf(id)?.id !== g) db.prepare('DELETE FROM gallery_access WHERE user_id = ? AND gallery_id = ?').run(id, g)
     if (b.signOut === true) db.prepare(`DELETE FROM sessions WHERE user_id IN (${tm})`).run(...targets)

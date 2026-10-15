@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
-import type { ActivityPage, ActivityPartition, AlbumLink, AiConversation, AiMessage, AiSettingsView, AiStatus, Album, BuddyLists, Comment, Conversation, Gallery, InboxItem, MediaItem, Message, Person, PublicFeed, Session, SiteSettings, Stats, Theme, ThemeDraft, Unread, User } from './types'
+import type { ActivityPage, ActivityPartition, AlbumLink, AiConversation, Group, NewAlbumEntry, Notification, SitePolicy, TimelineItem, TreeUser, AiMessage, AiSettingsView, AiStatus, Album, BuddyLists, Comment, Conversation, Gallery, InboxItem, MediaItem, Message, Person, PublicFeed, Session, SiteSettings, Stats, Theme, ThemeDraft, Unread, User } from './types'
 
 export const keys = {
   me: ['me'] as const,
@@ -310,4 +310,53 @@ export function useActivityKinds() {
 
 export function useActivityPartitions() {
   return useQuery({ queryKey: ['activity', 'partitions'], queryFn: () => api.get<{ partitions: ActivityPartition[] }>('/api/activity/partitions').then((r) => r.partitions) })
+}
+
+/* ---------- policy + groups (owner) ---------- */
+
+export function usePolicy() {
+  return useQuery({ queryKey: ['policy'], queryFn: () => api.get<{ policy: SitePolicy; permKeys: string[]; permLabels: Record<string, string>; limitKeys: string[]; limitLabels: Record<string, string> }>('/api/policy') })
+}
+
+export function useGroups(enabled = true) {
+  return useQuery({ queryKey: ['groups'], queryFn: () => api.get<{ groups: Group[] }>('/api/policy/groups').then((r) => r.groups), enabled })
+}
+
+/* ---------- notifications ---------- */
+
+export function useNotifUnread(enabled = true) {
+  return useQuery({ queryKey: ['notif-unread'], queryFn: () => api.get<{ unread: number; admin: { total: number; albums: number; requests: number; security: number } | null }>('/api/notifications/unread'), enabled, refetchInterval: 20_000 })
+}
+
+export function useNotifications(params: { kind?: string; unread?: boolean; q?: string; sort?: string; offset?: number; limit?: number }, admin = false, enabled = true) {
+  const qs = new URLSearchParams(Object.entries({ ...params, unread: params.unread ? '1' : '' }).filter(([, v]) => v != null && v !== '').map(([k, v]) => [k, String(v)])).toString()
+  return useQuery({ queryKey: ['notifications', admin, params], queryFn: () => api.get<{ items: Notification[]; total: number }>(`/api/notifications${admin ? '/admin' : ''}${qs ? `?${qs}` : ''}`), enabled, placeholderData: (prev) => prev })
+}
+
+/* ---------- owner: tree + new albums ---------- */
+
+export function useAdminTree(q = '', files = false) {
+  return useQuery({ queryKey: ['admin-tree', q, files], queryFn: () => api.get<{ tree: TreeUser[]; totals: { users: number; galleries: number; albums: number } }>(`/api/admin/tree?q=${encodeURIComponent(q)}${files ? '&files=1' : ''}`), placeholderData: (prev) => prev })
+}
+
+export function useNewAlbums(enabled = true) {
+  return useQuery({ queryKey: ['new-albums'], queryFn: () => api.get<{ albums: NewAlbumEntry[] }>('/api/admin/new-albums').then((r) => r.albums), enabled, refetchInterval: 30_000 })
+}
+
+/* ---------- timeline + reactions ---------- */
+
+export function useTimeline(params: { before?: number; kind?: string; q?: string }) {
+  const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v != null && v !== '').map(([k, v]) => [k, String(v)])).toString()
+  return useQuery({ queryKey: ['timeline', params], queryFn: () => api.get<{ items: TimelineItem[]; nextBefore: number | null }>(`/api/media/timeline${qs ? `?${qs}` : ''}`), placeholderData: (prev) => prev })
+}
+
+export function useReact() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (v: { mediaId: number; emoji: string | null }) => api.post<{ media: MediaItem; emoji: string[] }>(`/api/media/${v.mediaId}/react`, { emoji: v.emoji ?? '' }),
+    onSuccess: (r) => {
+      qc.setQueriesData<{ album: Album; media: MediaItem[]; comments: Comment[]; canManage: boolean }>({ queryKey: ['album'] }, (old) => (old ? { ...old, media: old.media.map((m) => (m.id === r.media.id ? { ...m, reactions: r.media.reactions, myReaction: r.media.myReaction } : m)) } : old))
+      qc.invalidateQueries({ queryKey: ['timeline'] })
+    },
+  })
 }

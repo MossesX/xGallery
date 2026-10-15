@@ -18,7 +18,7 @@ interface LiveTurn {
 
 /** Consume the server-sent event stream of one assistant turn. */
 async function streamTurn(conversationId: number, content: string, context: PageContext, onEvent: (event: string, data: Record<string, unknown>) => void, signal: AbortSignal): Promise<void> {
-  const res = await fetch(`/api/ai/conversations/${conversationId}/messages`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content, context }), credentials: 'include', signal })
+  const res = await fetch(`/api/ai/conversations/${conversationId}/messages`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'xgallery' }, body: JSON.stringify({ content, context }), credentials: 'include', signal })
   if (!res.ok || !res.body) {
     let msg = `Request failed (${res.status})`
     try {

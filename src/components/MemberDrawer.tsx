@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Eye, ExternalLink, Images, KeyRound, LogOut, MessageCircle, Save, Sparkles, Trash2, UserCheck, UserX, X } from 'lucide-react'
+import { Eye, ExternalLink, FolderOpen, Images, KeyRound, LogOut, MessageCircle, Save, Trash2, UserCheck, UserX, X } from 'lucide-react'
 import { api } from '../api/client'
-import { keys, useMe, useUserActivity } from '../api/hooks'
+import { keys, useGroups, useMe, useUserActivity } from '../api/hooks'
+import { TriState } from '../pages/admin/PoliciesPage'
+import { AlbumBrowserModal } from './AlbumBrowserModal'
 import { EventRow } from '../pages/admin/ActivityPage'
 import { Activity } from 'lucide-react'
-import type { Perms, Role, User } from '../api/types'
+import type { Limits, Perms, Role, User } from '../api/types'
 import { Avatar } from './Avatar'
 import { CheckList } from './CheckList'
 import { useUI } from '../store/ui'
@@ -14,7 +16,7 @@ import { formatBytes } from '../lib/media'
 
 interface Detail {
   user: User
-  albums: { id: number; slug: string; title: string; visibility: string; updatedAt: number }[]
+  albums: { id: number; slug: string; title: string; visibility: string; updatedAt: number; galleryId: number; galleryTitle: string; mediaCount: number }[]
   recentComments: { id: number; body: string; createdAt: number }[]
 }
 
@@ -22,9 +24,24 @@ export const PERM_LABELS: Record<keyof Perms, string> = {
   canUpload: 'Create albums and upload media',
   canPublish: 'Make albums public',
   canComment: 'Comment on albums and media',
-  canReact: 'Like media and save albums',
+  canReact: 'Like, react and save albums',
   canMessage: 'Send private messages',
   canBuddies: 'Send buddy requests',
+  canShareLinks: 'Create private links',
+  canCreateGalleries: 'Create extra galleries',
+  canChangeProfile: 'Change own profile and picture',
+  canDownload: 'Download originals and ZIPs',
+  canUseAssistant: 'Use the AI assistant',
+}
+
+export const LIMIT_LABELS: Record<keyof Limits, string> = {
+  maxGalleries: 'Galleries',
+  maxAlbums: 'Albums (0 = unlimited)',
+  maxMediaPerAlbum: 'Items per album (0 = unlimited)',
+  maxUploadMb: 'Max upload, MB',
+  storageQuotaMb: 'Storage quota, MB (0 = unlimited)',
+  maxPrivateLinks: 'Private links per album (0 = unlimited)',
+  messagesPerHour: 'Messages per hour (0 = unlimited)',
 }
 
 /** Owner-only: the full control panel for one account. */
@@ -34,10 +51,12 @@ export function MemberDrawer({ userId, galleries, onClose }: { userId: number | 
   const { data: me } = useMe()
   const { data, isLoading } = useQuery({ queryKey: ['user-detail', userId], queryFn: () => api.get<Detail>(`/api/users/${userId}`), enabled: userId != null })
   const { data: activity } = useUserActivity(userId)
-  const [draft, setDraft] = useState<{ displayName: string; username: string; bio: string; role: Role; status: 'active' | 'pending'; galleryIds: number[]; perms: Perms } | null>(null)
+  const [draft, setDraft] = useState<{ displayName: string; username: string; bio: string; email: string; phone: string; role: Role; status: 'active' | 'pending'; mustChangePassword: boolean; galleryIds: number[]; perms: Partial<Record<keyof Perms, boolean | null>>; limits: Partial<Record<keyof Limits, number | null>>; groupIds: number[] } | null>(null)
+  const { data: groups } = useGroups()
+  const [browse, setBrowse] = useState<number | null>(null)
   const [password, setPassword] = useState('')
   useEffect(() => {
-    if (data) setDraft({ displayName: data.user.display_name, username: data.user.username, bio: data.user.bio, role: data.user.role, status: data.user.status, galleryIds: data.user.galleryIds ?? [], perms: data.user.perms })
+    if (data) setDraft({ displayName: data.user.display_name, username: data.user.username, bio: data.user.bio, email: data.user.email ?? '', phone: data.user.phone ?? '', role: data.user.role, status: data.user.status, mustChangePassword: data.user.mustChangePassword, galleryIds: data.user.galleryIds ?? [], perms: { ...(data.user.permOverrides ?? {}) }, limits: { ...(data.user.limitOverrides ?? {}) }, groupIds: (data.user.groups ?? []).map((g) => g.id) })
   }, [data])
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['user-detail', userId] })
@@ -171,10 +190,23 @@ export function MemberDrawer({ userId, galleries, onClose }: { userId: number | 
                   <input className="input" value={draft.username} onChange={(e) => setDraft({ ...draft, username: e.target.value })} disabled={isOwner && !self} />
                 </div>
               </div>
+              <div className="row" style={{ alignItems: 'flex-start' }}>
+                <div className="field grow">
+                  <label>Email</label>
+                  <input className="input" type="email" value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} placeholder="not on file" />
+                </div>
+                <div className="field grow">
+                  <label>Phone</label>
+                  <input className="input" type="tel" value={draft.phone} onChange={(e) => setDraft({ ...draft, phone: e.target.value })} placeholder="not on file" />
+                </div>
+              </div>
               <div className="field">
                 <label>Bio</label>
                 <textarea className="textarea" value={draft.bio} onChange={(e) => setDraft({ ...draft, bio: e.target.value })} style={{ minHeight: 60 }} />
               </div>
+              <label className="checkbox">
+                <input type="checkbox" checked={draft.mustChangePassword} onChange={(e) => setDraft({ ...draft, mustChangePassword: e.target.checked })} /> Must choose a new password at next sign-in
+              </label>
               <div className="row" style={{ alignItems: 'flex-start' }}>
                 <div className="field grow">
                   <label>Role</label>
@@ -200,7 +232,7 @@ export function MemberDrawer({ userId, galleries, onClose }: { userId: number | 
                 ) : (
                   <span />
                 )}
-                <button className="btn primary sm" onClick={() => update.mutate({ displayName: draft.displayName, username: draft.username, bio: draft.bio, role: draft.role, status: draft.status })} disabled={update.isPending}>
+                <button className="btn primary sm" onClick={() => update.mutate({ displayName: draft.displayName, username: draft.username, bio: draft.bio, email: draft.email, phone: draft.phone, role: draft.role, status: draft.status, mustChangePassword: draft.mustChangePassword })} disabled={update.isPending}>
                   <Save size={13} /> Save identity
                 </button>
               </div>
@@ -209,32 +241,78 @@ export function MemberDrawer({ userId, galleries, onClose }: { userId: number | 
             {!isOwner && (
               <section className="card stack" style={{ gap: 10 }}>
                 <div className="row between">
-                  <h3 style={{ margin: 0 }}>Access</h3>
+                  <h3 style={{ margin: 0 }}>Access &amp; privileges</h3>
                   {u.disabled ? <span className="badge">Disabled</span> : <span className="badge success">Enabled</span>}
                 </div>
                 <label className="checkbox">
-                  <input type="checkbox" checked={!!u.aiEnabled} onChange={(e) => update.mutate({ aiEnabled: e.target.checked })} /> <Sparkles size={14} /> May use the AI assistant {u.role === 'admin' ? '(administrators included)' : ''}
-                </label>
-                <label className="checkbox">
                   <input type="checkbox" checked={!u.disabled} disabled={self} onChange={(e) => update.mutate({ disabled: !e.target.checked })} /> {u.disabled ? <UserX size={14} /> : <UserCheck size={14} />} Account enabled (sign-in allowed)
                 </label>
-                <div className="field" style={{ marginTop: 4 }}>
-                  <label>Capabilities</label>
-                  <div className="stack" style={{ gap: 6 }}>
-                    {(Object.keys(PERM_LABELS) as (keyof Perms)[]).map((k) => (
-                      <label className="checkbox" key={k}>
-                        <input type="checkbox" checked={draft.perms[k]} onChange={(e) => setDraft({ ...draft, perms: { ...draft.perms, [k]: e.target.checked } })} /> {PERM_LABELS[k]}
+                <div className="field">
+                  <label>Groups</label>
+                  <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+                    {(groups ?? []).map((g) => (
+                      <label className={`chip chip-tag ${draft.groupIds.includes(g.id) ? 'active' : ''}`} key={g.id} style={{ cursor: 'pointer' }}>
+                        <input type="checkbox" hidden checked={draft.groupIds.includes(g.id)} onChange={(e) => setDraft({ ...draft, groupIds: e.target.checked ? [...draft.groupIds, g.id] : draft.groupIds.filter((x) => x !== g.id) })} />
+                        {g.name}
+                      </label>
+                    ))}
+                    {!groups?.length && <span className="muted small">No groups yet (Policies → Groups).</span>}
+                  </div>
+                </div>
+                <div className="field">
+                  <label>Permissions · per-account override beats group and site defaults</label>
+                  <div className="stack" style={{ gap: 4 }}>
+                    {(Object.keys(PERM_LABELS) as (keyof Perms)[]).map((k) => {
+                      const effective = u.perms[k]
+                      const src = u.permSources?.[k] ?? 'default'
+                      return (
+                        <div className="row between perm-row" key={k}>
+                          <span className="small">
+                            {PERM_LABELS[k]}
+                            <span className={`muted small perm-eff ${effective ? 'on' : 'off'}`}> · now {effective ? 'allowed' : 'denied'} ({src})</span>
+                          </span>
+                          <TriState value={draft.perms[k] ?? null} onChange={(v) => setDraft({ ...draft, perms: { ...draft.perms, [k]: v } })} />
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+                <div className="field">
+                  <label>Limits · blank = inherit</label>
+                  <div className="limits-grid">
+                    {(Object.keys(LIMIT_LABELS) as (keyof Limits)[]).map((k) => (
+                      <label className="field" key={k}>
+                        <span className="small">
+                          {LIMIT_LABELS[k]} <span className="muted">(now {u.limits[k]}{u.limitSources?.[k] ? `, ${u.limitSources[k]}` : ''})</span>
+                        </span>
+                        <input className="input" type="number" min={0} value={draft.limits[k] ?? ''} placeholder="inherit" onChange={(e) => setDraft({ ...draft, limits: { ...draft.limits, [k]: e.target.value === '' ? null : Number(e.target.value) } })} />
                       </label>
                     ))}
                   </div>
                 </div>
                 <div className="row" style={{ justifyContent: 'flex-end' }}>
-                  <button className="btn primary sm" onClick={() => update.mutate({ perms: draft.perms })} disabled={update.isPending}>
-                    <Save size={13} /> Save capabilities
+                  <button className="btn primary sm" onClick={() => update.mutate({ perms: Object.fromEntries((Object.keys(PERM_LABELS) as (keyof Perms)[]).map((k) => [k, draft.perms[k] ?? null])), limits: Object.fromEntries((Object.keys(LIMIT_LABELS) as (keyof Limits)[]).map((k) => [k, draft.limits[k] ?? null])), groupIds: draft.groupIds })} disabled={update.isPending}>
+                    <Save size={13} /> Save privileges
                   </button>
                 </div>
               </section>
             )}
+
+            <section className="card stack" style={{ gap: 8 }}>
+              <h3 style={{ margin: 0 }}>
+                <FolderOpen size={14} /> Galleries ({u.galleries?.length ?? 0} of {u.limits.maxGalleries || '∞'})
+              </h3>
+              {(u.galleries ?? []).map((g) => (
+                <div key={g.id} className="row between small">
+                  <span>
+                    {g.title} {g.isPrimary && <span className="badge success">primary</span>}
+                  </span>
+                  <Link to={`/public/${g.slug}`} target="_blank" rel="noreferrer">
+                    /public/{g.slug}
+                  </Link>
+                </div>
+              ))}
+            </section>
 
             <section className="card stack" style={{ gap: 10 }}>
               <h3 style={{ margin: 0 }}>Galleries this account can see</h3>
@@ -299,10 +377,20 @@ export function MemberDrawer({ userId, galleries, onClose }: { userId: number | 
                 <h3 style={{ margin: 0 }}>
                   <Images size={14} /> Albums
                 </h3>
-                {data.albums.slice(0, 12).map((a) => (
+                {data.albums.map((a) => (
                   <div key={a.id} className="row between small">
-                    <Link to={`/album/${a.slug}`}>{a.title}</Link>
-                    <span className={`badge ${a.visibility === 'public' ? 'success' : a.visibility === 'published' ? 'primary' : ''}`}>{a.visibility === 'published' ? 'buddies' : a.visibility}</span>
+                    <span className="clamp-1">
+                      <button className="link-btn" onClick={() => setBrowse(a.id)} title="Browse in a floating window">
+                        {a.title}
+                      </button>
+                      <span className="muted"> · {a.galleryTitle} · {a.mediaCount} items</span>
+                    </span>
+                    <span className="row" style={{ gap: 6 }}>
+                      <span className={`badge ${a.visibility === 'public' ? 'success' : a.visibility === 'published' ? 'primary' : ''}`}>{a.visibility === 'published' ? 'buddies' : a.visibility}</span>
+                      <button className="btn ghost icon sm" title="Browse" onClick={() => setBrowse(a.id)}>
+                        <Images size={13} />
+                      </button>
+                    </span>
                   </div>
                 ))}
               </section>
@@ -320,6 +408,7 @@ export function MemberDrawer({ userId, galleries, onClose }: { userId: number | 
           </div>
         )}
       </aside>
+      <AlbumBrowserModal albumId={browse} onClose={() => setBrowse(null)} />
     </>
   )
 }

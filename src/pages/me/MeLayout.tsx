@@ -1,17 +1,20 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { Images, MessageCircle, Settings2, Sparkles, UserCircle2, Users } from 'lucide-react'
-import { useMe, useUnread } from '../../api/hooks'
+import { Bell, FolderOpen, Images, MessageCircle, Settings2, Sparkles, UserCircle2, Users } from 'lucide-react'
+import { useMe, useNotifUnread, useUnread } from '../../api/hooks'
 
 /** Every member's control panel: account, gallery, albums, buddies and messages. */
 export function MeLayout() {
   const { data: me } = useMe()
   const { data: unread } = useUnread(!!me)
+  const { data: notif } = useNotifUnread(!!me)
   const links = [
     { to: '/me', label: 'Profile', icon: UserCircle2, end: true },
-    { to: '/me/gallery', label: 'My gallery', icon: Sparkles },
+    { to: '/me/gallery', label: 'Gallery page', icon: Sparkles },
+    { to: '/me/galleries', label: 'My galleries', icon: FolderOpen },
     { to: '/me/albums', label: 'Albums', icon: Images },
     { to: '/me/buddies', label: 'Buddies', icon: Users, badge: unread?.requests },
     { to: '/me/messages', label: 'Messages', icon: MessageCircle, badge: unread?.messages },
+    { to: '/me/notifications', label: 'Notifications', icon: Bell, badge: notif?.unread },
   ]
   return (
     <main className="page">

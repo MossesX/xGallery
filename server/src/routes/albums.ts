@@ -7,6 +7,12 @@ import { HttpError, bool, num, slugify, str, wrap, IdRow } from '../util.js'
 import { albumJson, commentJson, mediaJson } from '../serialize.js'
 import { removeMediaFiles } from './media.js'
 import { track, logActivity } from '../activity.js'
+import { notify, notifyOwner } from '../notifications.js'
+import { writeZip } from '../zip.js'
+import path from 'node:path'
+import { existsSync } from 'node:fs'
+import { MEDIA_DIR } from '../db.js'
+import { galleryById } from '../access.js'
 
 export const albumsRouter = Router()
 
@@ -72,6 +78,8 @@ albumsRouter.post(
     let galleryId = req.body?.galleryId != null ? num(req.body.galleryId) : (galleryOf(req.user!.id)?.id ?? null)
     if (galleryId == null && isOwner(req.user)) galleryId = galleryOf(req.user!.id)?.id ?? null
     if (galleryId == null || !canManageGallery(req.user, galleryId)) throw new HttpError(403, 'You can only create albums in your own gallery')
+    const maxAlbums = req.user!.limits.maxAlbums
+    if (maxAlbums > 0 && (db.prepare('SELECT COUNT(*) c FROM albums a JOIN galleries g ON g.id = a.gallery_id WHERE g.owner_user_id = ?').get(req.user!.id) as { c: number }).c >= maxAlbums) throw new HttpError(403, `Your account may have ${maxAlbums} albums. Ask the owner for more.`)
     const t = now()
     const last = db.prepare('SELECT MAX(sort_order) m FROM albums').get() as { m: number | null }
     const info = db
@@ -86,6 +94,7 @@ albumsRouter.post(
     }
     const row = db.prepare('SELECT * FROM albums WHERE id = ?').get(newId) as IdRow
     track(req, 'album.create', { targetType: 'album', targetId: newId, targetLabel: title, detail: { public: req.body?.makePublic === true } })
+    notifyOwner({ kind: 'album.new', title: `New album “${title}” by ${req.user!.display_name}`, body: req.body?.makePublic === true ? 'Created as the public album' : '', actorId: req.user!.id, data: { albumId: newId, slug: row.slug, galleryId, username: req.user!.username, email: req.user!.email, phone: req.user!.phone } })
     res.status(201).json({ album: albumJson(row, req.user!.id) })
   }),
 )
@@ -145,6 +154,13 @@ albumsRouter.put(
     const slug = b.slug != null ? uniqueSlug(str(b.slug, 80) || title, id) : (row.slug as string)
     const description = b.description != null ? str(b.description, 2000) : (row.description as string)
     const visibility = b.visibility === 'published' || b.visibility === 'draft' || b.visibility === 'public' ? b.visibility : row.visibility
+    if (b.galleryId != null && num(b.galleryId) !== row.gallery_id) {
+      const target = num(b.galleryId)
+      if (!canManageGallery(req.user, target)) throw new HttpError(403, 'You can only move albums between your own galleries')
+      db.prepare('UPDATE galleries SET public_album_id = NULL WHERE public_album_id = ?').run(id)
+      db.prepare('UPDATE albums SET gallery_id = ? WHERE id = ?').run(target, id)
+      track(req, 'album.move', { targetType: 'album', targetId: id, detail: { from: row.gallery_id, to: target } })
+    }
     if (visibility === 'public' && row.visibility !== 'public' && !req.user!.perms.canPublish) throw new HttpError(403, 'Your account is not allowed to make albums public. Ask the owner.')
     const tags = Array.isArray(b.tags) ? JSON.stringify(b.tags.map((t: unknown) => str(t, 40)).filter(Boolean).slice(0, 20)) : (row.tags as string)
     const layout = 'layoutOverride' in b ? (b.layoutOverride ? JSON.stringify(b.layoutOverride) : null) : (row.layout_override as string | null)
@@ -225,6 +241,9 @@ albumsRouter.post(
   requireUser,
   wrap((req, res) => {
     const id = loadManaged(req, Number(req.params.id)).id
+    if (!req.user!.perms.canShareLinks) throw new HttpError(403, 'Your account is not allowed to create private links. Ask the owner.')
+    const maxLinks = req.user!.limits.maxPrivateLinks
+    if (maxLinks > 0 && (db.prepare('SELECT COUNT(*) c FROM album_links WHERE album_id = ? AND revoked_at IS NULL').get(id) as { c: number }).c >= maxLinks) throw new HttpError(403, `This album may have ${maxLinks} active private links.`)
     const link = createLink(id, req.user!.id, str(req.body?.label, 80))
     track(req, 'album.link_create', { targetType: 'album', targetId: id, detail: { label: link.label } })
     res.status(201).json({ link: linkJson(link) })
@@ -301,7 +320,58 @@ albumsRouter.post(
     const info = db.prepare('INSERT INTO comments(user_id, album_id, body, created_at) VALUES (?, ?, ?, ?)').run(req.user!.id, row.id, body, now())
     const c = db.prepare('SELECT c.*, u.display_name, u.username, u.avatar_path FROM comments c JOIN users u ON u.id = c.user_id WHERE c.id = ?').get(info.lastInsertRowid as number) as IdRow
     track(req, 'comment.album', { targetType: 'album', targetId: row.id, targetLabel: String(row.title ?? ''), detail: { body: String(c.body ?? '').slice(0, 140) } })
+    const albumOwner = galleryById(row.gallery_id)?.owner_user_id
+    if (albumOwner && albumOwner !== req.user!.id) notify({ userId: albumOwner, kind: 'comment.album', title: `${req.user!.display_name} commented on “${row.title}”`, body: String(c.body ?? '').slice(0, 200), actorId: req.user!.id, data: { albumId: row.id, slug: row.slug } })
     res.status(201).json({ comment: commentJson(c) })
+  }),
+)
+
+/* ---------- shared albums: collaborators may upload ---------- */
+
+albumsRouter.get(
+  '/:id/collaborators',
+  requireUser,
+  wrap((req, res) => {
+    const id = loadManaged(req, Number(req.params.id)).id
+    const rows = db.prepare('SELECT u.id, u.username, u.display_name FROM album_collaborators c JOIN users u ON u.id = c.user_id WHERE c.album_id = ? ORDER BY u.display_name').all(id) as IdRow[]
+    res.json({ collaborators: rows.map((r) => ({ id: r.id, username: r.username, displayName: r.display_name })) })
+  }),
+)
+
+albumsRouter.put(
+  '/:id/collaborators',
+  requireUser,
+  wrap((req, res) => {
+    const row = loadManaged(req, Number(req.params.id))
+    const ids: number[] = Array.isArray(req.body?.userIds) ? (req.body.userIds as unknown[]).map(Number).filter((n) => Number.isFinite(n)) : []
+    db.prepare('DELETE FROM album_collaborators WHERE album_id = ?').run(row.id)
+    for (const uid of ids) {
+      if (uid === req.user!.id) continue
+      db.prepare('INSERT OR IGNORE INTO album_collaborators(album_id, user_id, created_at) VALUES (?, ?, ?)').run(row.id, uid, now())
+      notify({ userId: uid, kind: 'album.shared', title: `${req.user!.display_name} invited you to add to “${row.title}”`, actorId: req.user!.id, data: { albumId: row.id, slug: row.slug } })
+    }
+    track(req, 'album.collaborators', { targetType: 'album', targetId: row.id, targetLabel: String(row.title ?? ''), detail: { count: ids.length } })
+    res.json({ ok: true, count: ids.length })
+  }),
+)
+
+/** Download the whole album as a ZIP (store method). */
+albumsRouter.get(
+  '/:id/download.zip',
+  requireUser,
+  wrap(async (req, res) => {
+    const row = loadAlbum(req, req.params.id as string)
+    if (!req.user!.perms.canDownload) throw new HttpError(403, 'Your account is not allowed to download originals. Ask the owner.')
+    const media = db.prepare('SELECT id, title, file_path FROM media WHERE album_id = ? ORDER BY sort_order, id').all(row.id) as IdRow[]
+    const entries = media
+      .map((m) => ({ name: `${String(m.title || 'media').replace(/[\\/:*?"<>|]+/g, '_').slice(0, 80)}${path.extname(String(m.file_path))}`, path: path.join(MEDIA_DIR, String(m.file_path)) }))
+      .filter((e) => existsSync(e.path))
+    const safeTitle = String(row.title ?? 'album').replace(/[^\w.-]+/g, '_').slice(0, 60)
+    res.setHeader('Content-Type', 'application/zip')
+    res.setHeader('Content-Disposition', `attachment; filename="${safeTitle}.zip"`)
+    track(req, 'album.download', { targetType: 'album', targetId: row.id, targetLabel: String(row.title ?? ''), detail: { files: entries.length } })
+    await writeZip(res, entries)
+    res.end()
   }),
 )
 

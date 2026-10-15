@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, ArrowLeftRight, Copy, ExternalLink, Globe, GripVertical, Link2, Link2Off, Lock, Pencil, Star, Trash2 } from 'lucide-react'
 import { api, ApiError } from '../../api/client'
-import { useAlbum, useBuddies, useMe, useSettings, useUsers, useAlbumLinks, useCreateLink } from '../../api/hooks'
+import { useAlbum, useBuddies, useGalleries, useMe, useSettings, useUsers, useAlbumLinks, useCreateLink } from '../../api/hooks'
 import { CheckList } from '../../components/CheckList'
 import type { Album, LayoutConfig, MediaItem } from '../../api/types'
 import { MediaThumb } from '../../components/MediaThumb'
@@ -32,6 +32,10 @@ export function AlbumEditorPage() {
   const isAdmin = me?.role === 'admin' || me?.role === 'owner'
   const { data: users } = useUsers(isAdmin)
   const { data: buddyLists } = useBuddies(!!me)
+  const { data: galleriesAll } = useGalleries()
+  const { data: collabData } = useQuery({ queryKey: ['album-collaborators', id], queryFn: () => api.get<{ collaborators: { id: number }[] }>(`/api/albums/${id}/collaborators`).then((r) => r.collaborators.map((c) => c.id)), enabled: !!id })
+  const [collab, setCollab] = useState<number[] | null>(null)
+  const saveCollab = useMutation({ mutationFn: (ids: number[]) => api.put(`/api/albums/${id}/collaborators`, { userIds: ids }), onSuccess: () => { qc.invalidateQueries({ queryKey: ['album-collaborators', id] }); notify('Collaborators saved', 'success') }, onError: (e: Error) => notify(e.message, 'error') })
   const [restricted, setRestricted] = useState(false)
   const [allowed, setAllowed] = useState<number[]>([])
   const [accessDirty, setAccessDirty] = useState(false)
@@ -178,6 +182,36 @@ export function AlbumEditorPage() {
         </section>
 
         <div className="stack" style={{ gap: 'calc(var(--space) * 3)' }}>
+          {(galleriesAll ?? []).filter((g) => g.isMine || me?.role === 'owner').length > 1 && (
+            <section className="card stack" style={{ gap: 'calc(var(--space) * 1.5)' }}>
+              <h3 style={{ margin: 0 }}>Gallery</h3>
+              <select className="select" value={album.galleryId} onChange={(e) => patch.mutate({ galleryId: Number(e.target.value) }, { onSuccess: () => notify('Album moved', 'success') })} aria-label="Gallery">
+                {(galleriesAll ?? []).filter((g) => g.isMine || me?.role === 'owner').map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.title}
+                    {g.isPrimary ? ' · primary' : ''}
+                  </option>
+                ))}
+              </select>
+            </section>
+          )}
+
+          <section className="card stack" style={{ gap: 'calc(var(--space) * 1.5)' }}>
+            <div className="row between">
+              <h3 style={{ margin: 0 }}>Shared album</h3>
+              <span className="badge">{(collab ?? collabData ?? []).length} collaborators</span>
+            </div>
+            <p className="muted small" style={{ margin: 0 }}>
+              Collaborators can add their own photos and videos to this album, like a shared album. Pick from your buddies.
+            </p>
+            <CheckList options={(buddyLists?.buddies ?? []).map((b) => ({ id: b.id, label: b.displayName, hint: `@${b.username}` }))} selected={collab ?? collabData ?? []} onChange={setCollab} emptyText="Add buddies first to share an album with them." />
+            <div className="row" style={{ justifyContent: 'flex-end' }}>
+              <button className="btn primary sm" onClick={() => saveCollab.mutate(collab ?? collabData ?? [])} disabled={collab == null || saveCollab.isPending}>
+                Save collaborators
+              </button>
+            </div>
+          </section>
+
           <section className="card stack" style={{ gap: 'calc(var(--space) * 1.5)' }}>
             <div className="row between">
               <h3 style={{ margin: 0 }}>Private links</h3>

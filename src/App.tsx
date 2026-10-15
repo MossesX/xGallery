@@ -31,6 +31,15 @@ import { AssistantSettingsPage } from './pages/admin/AssistantSettingsPage'
 import { InboxPage } from './pages/admin/InboxPage'
 import { ActivityPage } from './pages/admin/ActivityPage'
 import { RequestAccountPage } from './pages/RequestAccountPage'
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage'
+import { ChangePasswordPage } from './pages/ChangePasswordPage'
+import { PhotosPage } from './pages/PhotosPage'
+import { NotificationsPage } from './pages/me/NotificationsPage'
+import { MyGalleriesPage } from './pages/me/MyGalleriesPage'
+import { NotificationsAdminPage } from './pages/admin/NotificationsAdminPage'
+import { NewAlbumsPage } from './pages/admin/NewAlbumsPage'
+import { GalleryTreePage } from './pages/admin/GalleryTreePage'
+import { PoliciesPage } from './pages/admin/PoliciesPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -52,6 +61,7 @@ function Root() {
   const { data: user, isLoading } = useMe()
   if (isLoading) return <PageLoader />
   if (!user) return <PublicHomePage />
+  if (user.mustChangePassword) return <Navigate to="/change-password" replace />
   return (
     <AppShell>
       <HomePage />
@@ -68,6 +78,8 @@ export default function App() {
             <Route path="/" element={<Root />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/request-account" element={<RequestAccountPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/change-password" element={<ChangePasswordPage />} />
             <Route path="/contact" element={<RequestAccountPage />} />
             <Route path="/s/:token" element={<SharePage />} />
             <Route path="/public" element={<PublicDirectoryPage />} />
@@ -78,6 +90,7 @@ export default function App() {
                 <Route path="/album/:slug" element={<AlbumPage />} />
                 <Route path="/g/:slug" element={<GalleryPage />} />
                 <Route path="/galleries" element={<GalleriesPage />} />
+                <Route path="/photos" element={<PhotosPage />} />
                 <Route path="/favorites" element={<FavoritesPage />} />
                 <Route path="/account" element={<Navigate to="/me" replace />} />
                 <Route path="/me" element={<MeLayout />}>
@@ -86,6 +99,8 @@ export default function App() {
                   <Route path="albums" element={<AlbumsPage />} />
                   <Route path="albums/:id" element={<AlbumEditorPage />} />
                   <Route path="buddies" element={<BuddiesPage />} />
+                  <Route path="notifications" element={<NotificationsPage />} />
+                  <Route path="galleries" element={<MyGalleriesPage />} />
                   <Route path="messages" element={<MessagesPage />} />
                   <Route path="messages/:id" element={<MessagesPage />} />
                 </Route>
@@ -102,6 +117,10 @@ export default function App() {
                       <Route path="assistant" element={<AssistantSettingsPage />} />
                       <Route path="inbox" element={<InboxPage />} />
                       <Route path="activity" element={<ActivityPage />} />
+                      <Route path="notifications" element={<NotificationsAdminPage />} />
+                      <Route path="new-albums" element={<NewAlbumsPage />} />
+                      <Route path="tree" element={<GalleryTreePage />} />
+                      <Route path="policies" element={<PoliciesPage />} />
                     </Route>
                   </Route>
                 </Route>

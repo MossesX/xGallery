@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Clapperboard, Eye, Globe, Heart, Images, Link2, Lock, Play, Share2, Tv } from 'lucide-react'
+import { ArrowLeft, Clapperboard, Download, Eye, Globe, Heart, Images, Link2, Lock, Play, Share2, Tv } from 'lucide-react'
 import { useAlbum, useSettings, useCreateLink, useTogglePublic } from '../api/hooks'
 import { MediaLayout } from '../components/MediaLayout'
 import { Lightbox } from '../components/Lightbox'
@@ -91,6 +91,11 @@ export function AlbumPage() {
             <Share2 size={14} /> Share
           </button>
           <FavoriteButton album={album} />
+          {site.settings.allowDownloads && media.length > 0 && (
+            <a className="btn sm" href={`/api/albums/${album.id}/download.zip`} title="Download the whole album as a ZIP">
+              <Download size={14} /> ZIP
+            </a>
+          )}
           {canManage && (
             <>
               <button className={`btn sm ${album.isPublic ? 'accent' : ''}`} onClick={flipPublic} disabled={togglePublic.isPending} title={album.isPublic ? 'Public: anyone can see this album. Click to make it buddies & members only.' : 'Make this album public (no login needed)'} aria-pressed={album.isPublic}>

@@ -1,6 +1,8 @@
 import { pbkdf2Sync, randomBytes, timingSafeEqual } from 'node:crypto'
 import type { Request, Response, NextFunction } from 'express'
 import { db, now } from './db.js'
+import { PERM_LABELS, getPolicy, resolveEffective, type Limits, type Perms } from './policy.js'
+export type { Perms, Limits } from './policy.js'
 
 export interface User {
   id: number
@@ -14,41 +16,15 @@ export interface User {
   avatarUrl: string | null
   aiEnabled: boolean
   perms: Perms
+  limits: Limits
+  groups: { id: number; name: string }[]
+  mustChangePassword: boolean
+  email: string
+  phone: string
   created_at: number
   last_seen_at: number | null
 }
 
-/** Per-account capabilities the owner can switch off. Everything is on by default. */
-export interface Perms {
-  canUpload: boolean
-  canMessage: boolean
-  canComment: boolean
-  canReact: boolean
-  canBuddies: boolean
-  canPublish: boolean
-}
-export const DEFAULT_PERMS: Perms = { canUpload: true, canMessage: true, canComment: true, canReact: true, canBuddies: true, canPublish: true }
-export const PERM_LABELS: Record<keyof Perms, string> = {
-  canUpload: 'create albums and upload media',
-  canMessage: 'send private messages',
-  canComment: 'comment',
-  canReact: 'like and save albums',
-  canBuddies: 'send buddy requests',
-  canPublish: 'make albums public',
-}
-export function parsePerms(v: unknown): Perms {
-  let o: Partial<Perms> = {}
-  if (typeof v === 'string') {
-    try {
-      o = JSON.parse(v) as Partial<Perms>
-    } catch {
-      o = {}
-    }
-  } else if (v && typeof v === 'object') o = v as Partial<Perms>
-  const out = { ...DEFAULT_PERMS }
-  for (const k of Object.keys(DEFAULT_PERMS) as (keyof Perms)[]) if (typeof o[k] === 'boolean') out[k] = o[k] as boolean
-  return out
-}
 
 /** Public URL of a user's profile picture, versioned by its stored path so browsers refresh on change. */
 export function avatarUrlFor(id: number, avatarPath: unknown): string | null {
@@ -56,6 +32,7 @@ export function avatarUrlFor(id: number, avatarPath: unknown): string | null {
 }
 
 const SESSION_DAYS = 30
+const sessionDays = () => { try { return getPolicy().sessionDays } catch { return SESSION_DAYS } }
 export const COOKIE = 'xg_session'
 /** While the owner is signed in as someone else, this holds the owner's own session token. */
 export const RETURN_COOKIE = 'xg_return'
@@ -75,6 +52,7 @@ export function verifyPassword(password: string, salt: string, hash: string): bo
 }
 
 export function publicUser(row: Record<string, unknown>): User {
+  const eff = resolveEffective({ id: row.id as number, role: row.role as string, perms: row.perms, limits: row.limits, ai_enabled: row.ai_enabled })
   return {
     id: row.id as number,
     username: row.username as string,
@@ -85,11 +63,37 @@ export function publicUser(row: Record<string, unknown>): User {
     created_by: (row.created_by as number | null) ?? null,
     bio: (row.bio as string) ?? '',
     avatarUrl: avatarUrlFor(row.id as number, row.avatar_path),
-    aiEnabled: row.role === 'owner' || !!row.ai_enabled,
-    perms: row.role === 'owner' ? { ...DEFAULT_PERMS } : parsePerms(row.perms),
+    aiEnabled: eff.perms.canUseAssistant,
+    perms: eff.perms,
+    limits: eff.limits,
+    groups: eff.groups,
+    mustChangePassword: !!row.must_change_password,
+    email: (row.email as string) ?? '',
+    phone: (row.phone as string) ?? '',
     created_at: row.created_at as number,
     last_seen_at: (row.last_seen_at as number | null) ?? null,
   }
+}
+
+/** Sliding-window login throttle per IP and per username, sized by policy. */
+const attempts = new Map<string, number[]>()
+export function loginThrottle(key: string, max: number): void {
+  const t = Date.now()
+  const list = (attempts.get(key) ?? []).filter((x) => t - x < 15 * 60_000)
+  attempts.set(key, list)
+  if (list.length >= max) throw new Error('Too many sign-in attempts. Try again in a few minutes.')
+}
+export function loginFailed(key: string): void {
+  const list = attempts.get(key) ?? []
+  list.push(Date.now())
+  attempts.set(key, list)
+}
+export function loginSucceeded(key: string): void {
+  attempts.delete(key)
+}
+export function attemptsFor(username: string): number {
+  const t = Date.now()
+  return (attempts.get(`user:${username}`) ?? []).filter((x) => t - x < 15 * 60_000).length
 }
 
 export function createSession(userId: number): string {
@@ -117,7 +121,7 @@ export function parseCookies(header: string | undefined): Record<string, string>
 export function setSessionCookie(res: Response, token: string | null, returnToken?: string | null): void {
   const secure = process.env.NODE_ENV === 'production' ? '; Secure' : ''
   const cookies: string[] = []
-  if (token) cookies.push(`${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_DAYS * 86_400}${secure}`)
+  if (token) cookies.push(`${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${sessionDays() * 86_400}${secure}`)
   else cookies.push(`${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`)
   if (returnToken !== undefined) {
     if (returnToken) cookies.push(`${RETURN_COOKIE}=${returnToken}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${12 * 3600}${secure}`)

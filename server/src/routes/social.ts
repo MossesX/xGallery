@@ -7,6 +7,8 @@ import { avatarUrlFor, publicUser, requirePerm, requireUser } from '../auth.js'
 import { HttpError, str, wrap, IdRow } from '../util.js'
 import { areBuddies, galleryOf } from '../access.js'
 import { track } from '../activity.js'
+import { notify } from '../notifications.js'
+import { getPolicy } from '../policy.js'
 
 /** Social layer: profile pictures, the people directory, buddy lists and private messages. */
 export const socialRouter = Router()
@@ -51,6 +53,7 @@ socialRouter.post(
   '/avatar',
   requireUser,
   wrap(async (req, res) => {
+    if (!req.user!.perms.canChangeProfile) throw new HttpError(403, 'Your account is not allowed to change its profile. Ask the owner.')
     const mime = str(req.headers['content-type'], 100)
     const ext: Record<string, string> = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif' }
     if (!ext[mime]) throw new HttpError(415, 'Use a JPEG, PNG, WebP or GIF picture')
@@ -150,6 +153,7 @@ socialRouter.post(
     if (incoming) db.prepare("UPDATE buddies SET status = 'accepted' WHERE user_id = ? AND buddy_id = ?").run(other, me)
     else db.prepare("INSERT OR IGNORE INTO buddies(user_id, buddy_id, status, created_at) VALUES (?, ?, 'pending', ?)").run(me, other, now())
     track(req, incoming ? 'buddy.accept' : 'buddy.request', { targetType: 'user', targetId: other, targetLabel: String(row.username) })
+    notify({ userId: other, kind: incoming ? 'buddy.accepted' : 'buddy.request', title: incoming ? `${req.user!.display_name} accepted your buddy request` : `${req.user!.display_name} wants to be your buddy`, actorId: me, data: { userId: me } })
     res.json({ person: personJson(row, me) })
   }),
 )
@@ -164,6 +168,7 @@ socialRouter.put(
     if (!r.changes) throw new HttpError(404, 'No pending request from that person')
     const row = db.prepare('SELECT * FROM users WHERE id = ?').get(other) as IdRow
     track(req, 'buddy.accept', { targetType: 'user', targetId: other, targetLabel: String(row.username) })
+    notify({ userId: other, kind: 'buddy.accepted', title: `${req.user!.display_name} accepted your buddy request`, actorId: me, data: { userId: me } })
     res.json({ person: personJson(row, me) })
   }),
 )
@@ -254,8 +259,14 @@ socialRouter.post(
     if (!u) throw new HttpError(404, 'Person not found')
     const body = str(req.body?.body, 4000).trim()
     if (!body) throw new HttpError(400, 'Message is empty')
+    const policy = getPolicy()
+    if (policy.messaging === 'off' && req.user!.role !== 'owner' && (u.role as string) !== 'owner') throw new HttpError(403, 'Private messaging is switched off on this site')
+    if (policy.messaging === 'buddies' && req.user!.role !== 'owner' && (u.role as string) !== 'owner' && !areBuddies(me, other)) throw new HttpError(403, 'You can only message your buddies here')
+    const perHour = req.user!.limits.messagesPerHour
+    if (perHour > 0 && (db.prepare('SELECT COUNT(*) c FROM messages WHERE from_id = ? AND created_at > ?').get(me, now() - 3_600_000) as { c: number }).c >= perHour) throw new HttpError(429, `You can send ${perHour} messages per hour`)
     const info = db.prepare('INSERT INTO messages(from_id, to_id, body, created_at) VALUES (?, ?, ?, ?)').run(me, other, body, now())
     track(req, 'message.send', { targetType: 'user', targetId: other, targetLabel: String(u.username), detail: { length: body.length } })
+    notify({ userId: other, kind: 'message.new', title: `New message from ${req.user!.display_name}`, body: body.slice(0, 160), actorId: me, data: { fromId: me } })
     res.status(201).json({ message: messageJson(db.prepare('SELECT * FROM messages WHERE id = ?').get(info.lastInsertRowid as number) as IdRow) })
   }),
 )

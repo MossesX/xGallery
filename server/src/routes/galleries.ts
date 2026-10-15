@@ -2,7 +2,12 @@ import { Router } from 'express'
 import { db, now } from '../db.js'
 import { requireUser } from '../auth.js'
 import { HttpError, num, parseJson, slugify, str, wrap, IdRow } from '../util.js'
-import { accessibleGalleryIds, canBrowseAlbum, canManageGallery, galleryById, grantedGalleryIds, type GalleryRow } from '../access.js'
+import { accessibleGalleryIds, canBrowseAlbum, canManageGallery, galleriesOf, galleryById, galleryOf, grantedGalleryIds, uniqueGallerySlugFor, type GalleryRow } from '../access.js'
+import { createWriteStream, existsSync, mkdirSync, unlinkSync } from 'node:fs'
+import path from 'node:path'
+import { pipeline } from 'node:stream/promises'
+import { MEDIA_DIR } from '../db.js'
+import { track } from '../activity.js'
 import { albumJson, galleryJson, mediaJson } from '../serialize.js'
 
 export const galleriesRouter = Router()
@@ -69,6 +74,14 @@ galleriesRouter.put(
     }
     let theme = g.theme_id
     if ('themeId' in b) theme = b.themeId == null ? null : num(b.themeId)
+    if (b.clearCover === true && g.cover_path) {
+      try {
+        unlinkSync(path.join(MEDIA_DIR, g.cover_path))
+      } catch {
+        /* ignore */
+      }
+      db.prepare('UPDATE galleries SET cover_path = NULL WHERE id = ?').run(g.id)
+    }
     let pub = g.public_album_id
     if ('publicAlbumId' in b) {
       pub = b.publicAlbumId == null ? null : num(b.publicAlbumId)
@@ -78,6 +91,108 @@ galleriesRouter.put(
       if (pub != null) db.prepare("UPDATE albums SET visibility = 'public', updated_at = ? WHERE id = ?").run(now(), pub)
     }
     db.prepare('UPDATE galleries SET title = ?, slug = ?, tagline = ?, headline = ?, splash_media_id = ?, theme_id = ?, public_album_id = ?, updated_at = ? WHERE id = ?').run(title, slug, tagline, headline, splash, theme, pub, now(), g.id)
+    res.json({ gallery: galleryJson(galleryById(g.id)!, req.user!.id) })
+  }),
+)
+
+
+/* ---------- many galleries per account ---------- */
+
+const MAX_COVER = 8 * 1024 * 1024
+
+/** Create an extra gallery, within the account's gallery limit. */
+galleriesRouter.post(
+  '/',
+  requireUser,
+  wrap((req, res) => {
+    const u = req.user!
+    const title = str(req.body?.title, 80).trim()
+    if (!title) throw new HttpError(400, 'Give the gallery a name')
+    const owned = galleriesOf(u.id)
+    if (!u.perms.canCreateGalleries && owned.length >= 1) throw new HttpError(403, 'Your account is not allowed to create extra galleries. Ask the owner.')
+    const max = u.limits.maxGalleries
+    if (max > 0 && owned.length >= max) throw new HttpError(403, `Your account may have ${max} galler${max === 1 ? 'y' : 'ies'}. Ask the owner for more.`)
+    const t = now()
+    const info = db.prepare('INSERT INTO galleries(owner_user_id, slug, title, tagline, is_primary, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(u.id, uniqueGallerySlugFor(title), title, str(req.body?.tagline, 160), owned.length === 0 ? 1 : 0, owned.length, t, t)
+    const gid = info.lastInsertRowid as number
+    db.prepare('INSERT OR IGNORE INTO gallery_access(user_id, gallery_id, created_at) VALUES (?, ?, ?)').run(u.id, gid, t)
+    track(req, 'gallery.create', { targetType: 'gallery', targetId: gid, targetLabel: title })
+    res.status(201).json({ gallery: galleryJson(galleryById(gid)!, u.id) })
+  }),
+)
+
+/** Upload a custom gallery image (JPEG/PNG/WebP/GIF, up to 8 MB). */
+galleriesRouter.post(
+  '/:id/cover',
+  requireUser,
+  wrap(async (req, res) => {
+    const g = galleryById(Number(req.params.id))
+    if (!g || !canManageGallery(req.user, g.id)) throw new HttpError(404, 'Gallery not found')
+    const mime = str(req.headers['content-type'], 100)
+    const ext: Record<string, string> = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif' }
+    if (!ext[mime]) throw new HttpError(415, 'Use a JPEG, PNG, WebP or GIF image')
+    if (Number(req.headers['content-length'] ?? 0) > MAX_COVER) throw new HttpError(413, 'Image must be under 8 MB')
+    const rel = path.posix.join('covers', `${g.id}-${now()}${ext[mime]}`)
+    const abs = path.join(MEDIA_DIR, rel)
+    mkdirSync(path.dirname(abs), { recursive: true })
+    let received = 0
+    req.on('data', (c: Buffer) => {
+      received += c.length
+      if (received > MAX_COVER) req.destroy(new HttpError(413, 'Image must be under 8 MB'))
+    })
+    await pipeline(req, createWriteStream(abs))
+    if (g.cover_path && existsSync(path.join(MEDIA_DIR, g.cover_path))) {
+      try {
+        unlinkSync(path.join(MEDIA_DIR, g.cover_path))
+      } catch {
+        /* ignore */
+      }
+    }
+    db.prepare('UPDATE galleries SET cover_path = ?, updated_at = ? WHERE id = ?').run(rel, now(), g.id)
+    track(req, 'gallery.cover', { targetType: 'gallery', targetId: g.id, targetLabel: g.title })
+    res.json({ gallery: galleryJson(galleryById(g.id)!, req.user!.id) })
+  }),
+)
+
+galleriesRouter.get(
+  '/:id/cover',
+  wrap((req, res) => {
+    const g = galleryById(Number(req.params.id))
+    if (!g?.cover_path) throw new HttpError(404, 'No image')
+    const abs = path.join(MEDIA_DIR, g.cover_path)
+    if (!existsSync(abs)) throw new HttpError(404, 'No image')
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
+    res.sendFile(abs)
+  }),
+)
+
+/** Delete a non-primary gallery; its albums move to the owner's primary gallery. */
+galleriesRouter.delete(
+  '/:id',
+  requireUser,
+  wrap((req, res) => {
+    const g = galleryById(Number(req.params.id))
+    if (!g || !canManageGallery(req.user, g.id)) throw new HttpError(404, 'Gallery not found')
+    if (g.is_primary) throw new HttpError(400, 'The primary gallery cannot be deleted')
+    const primary = galleryOf(g.owner_user_id)
+    if (primary && primary.id !== g.id) {
+      db.prepare('UPDATE albums SET gallery_id = ? WHERE gallery_id = ?').run(primary.id, g.id)
+    }
+    db.prepare('DELETE FROM galleries WHERE id = ?').run(g.id)
+    track(req, 'gallery.delete', { targetType: 'gallery', targetId: g.id, targetLabel: g.title })
+    res.json({ ok: true, movedTo: primary?.id ?? null })
+  }),
+)
+
+/** Make one of your galleries the primary (the one your profile page shows first). */
+galleriesRouter.post(
+  '/:id/primary',
+  requireUser,
+  wrap((req, res) => {
+    const g = galleryById(Number(req.params.id))
+    if (!g || !canManageGallery(req.user, g.id)) throw new HttpError(404, 'Gallery not found')
+    db.prepare('UPDATE galleries SET is_primary = 0 WHERE owner_user_id = ?').run(g.owner_user_id)
+    db.prepare('UPDATE galleries SET is_primary = 1 WHERE id = ?').run(g.id)
     res.json({ gallery: galleryJson(galleryById(g.id)!, req.user!.id) })
   }),
 )

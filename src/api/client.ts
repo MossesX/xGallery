@@ -11,7 +11,7 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
   const res = await fetch(url, {
     method,
     credentials: 'include',
-    headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+    headers: { 'X-Requested-With': 'xgallery', ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   })
   if (res.status === 204) return undefined as T
@@ -34,6 +34,7 @@ export function uploadRaw(url: string, blob: Blob, contentType: string, meta: Re
     xhr.open('POST', url)
     xhr.withCredentials = true
     xhr.setRequestHeader('Content-Type', contentType)
+    xhr.setRequestHeader('X-Requested-With', 'xgallery')
     xhr.setRequestHeader('x-meta', btoa(unescape(encodeURIComponent(JSON.stringify(meta)))))
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total)

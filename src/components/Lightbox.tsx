@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, Download, Info, Link2, Maximize2, Pause, Play, Repeat, X, ZoomIn, ZoomOut } from 'lucide-react'
 import type { MediaItem } from '../api/types'
 import { LikeButton } from './LikeButton'
+import { ReactionBar } from './ReactionBar'
 import { Comments } from './Comments'
 import { formatBytes, formatDuration } from '../lib/media'
 import { api } from '../api/client'
@@ -232,6 +233,7 @@ export function Lightbox({ items, index, onClose, onNavigate, allowComments, all
           {item.description && <p className="muted" style={{ whiteSpace: 'pre-wrap' }}>{item.description}</p>}
           <div className="row" style={{ gap: 10 }}>
             {allowLikes && !readOnly && <LikeButton item={item} />}
+            {allowLikes && !readOnly && <ReactionBar item={item} compact />}
             <span className="muted small">{item.views} views</span>
           </div>
         </div>

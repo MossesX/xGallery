@@ -16,6 +16,9 @@ import { socialRouter } from './routes/social.js'
 import { aiRouter } from './routes/ai.js'
 import { inboxRouter } from './routes/inbox.js'
 import { activityRouter } from './routes/activity.js'
+import { policyRouter } from './routes/policy.js'
+import { notificationsRouter } from './routes/notifications.js'
+import { adminRouter } from './routes/admin.js'
 
 ensureSeeded()
 // The demo community is opt-in for development (XG_DEMO=1); production data stays real.
@@ -27,6 +30,25 @@ setInterval(pruneSessions, 6 * 3600 * 1000).unref()
 export const app = express()
 app.disable('x-powered-by')
 app.set('trust proxy', true)
+app.disable('x-powered-by')
+// Security headers for every response.
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN')
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin')
+  if (process.env.NODE_ENV === 'production') res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains')
+  next()
+})
+// State-changing API calls must come from our own pages: a JSON body or an upload with our metadata header.
+app.use('/api', (req, res, next) => {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next()
+  const ct = String(req.headers['content-type'] ?? '')
+  const ok = ct.startsWith('application/json') || req.headers['x-meta'] != null || ct.startsWith('image/') || ct.startsWith('video/') || req.headers['x-requested-with'] === 'xgallery'
+  if (!ok) return res.status(415).json({ error: 'Unsupported request format' })
+  next()
+})
 
 app.get('/healthz', (_req, res) => res.type('text').send('ok'))
 
@@ -42,6 +64,9 @@ app.use('/api/social', socialRouter)
 app.use('/api/ai', aiRouter)
 app.use('/api/inbox', inboxRouter)
 app.use('/api/activity', activityRouter)
+app.use('/api/policy', policyRouter)
+app.use('/api/notifications', notificationsRouter)
+app.use('/api/admin', adminRouter)
 app.use('/api/themes', themesRouter)
 app.use('/api/settings', settingsRouter)
 app.use('/api', mediaRouter)

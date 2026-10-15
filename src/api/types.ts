@@ -10,6 +10,16 @@ export interface User {
   avatarUrl: string | null
   aiEnabled: boolean
   perms: Perms
+  limits: Limits
+  groups: { id: number; name: string }[]
+  mustChangePassword: boolean
+  email: string
+  phone: string
+  permOverrides?: Partial<Perms>
+  limitOverrides?: Partial<Limits>
+  permSources?: Record<keyof Perms, Source>
+  limitSources?: Record<keyof Limits, Source>
+  galleries?: { id: number; slug: string; title: string; isPrimary: boolean }[]
   created_at: number
   last_seen_at: number | null
   status: 'active' | 'pending'
@@ -19,7 +29,7 @@ export interface User {
   galleryIds?: number[]
   ownGalleryId?: number | null
   ownGallerySlug?: string | null
-  counts?: { albums: number; publicAlbums: number; media: number; bytes: number; messagesSent: number; buddies: number; sessions: number; aiConversations: number }
+  counts?: { albums: number; publicAlbums: number; media: number; bytes: number; galleries: number; messagesSent: number; buddies: number; sessions: number; aiConversations: number }
 }
 
 /** Owner-controlled capabilities; everything is on by default. */
@@ -30,6 +40,122 @@ export interface Perms {
   canReact: boolean
   canMessage: boolean
   canBuddies: boolean
+  canShareLinks: boolean
+  canCreateGalleries: boolean
+  canChangeProfile: boolean
+  canDownload: boolean
+  canUseAssistant: boolean
+}
+
+export interface Limits {
+  maxGalleries: number
+  maxAlbums: number
+  maxMediaPerAlbum: number
+  maxUploadMb: number
+  storageQuotaMb: number
+  maxPrivateLinks: number
+  messagesPerHour: number
+}
+
+export type Source = 'default' | 'group' | 'user'
+
+export interface SitePolicy {
+  perms: Perms
+  limits: Limits
+  messaging: 'anyone' | 'buddies' | 'off'
+  forcePasswordChange: boolean
+  minPasswordLength: number
+  acceptRequests: boolean
+  allowedTypes: string[]
+  moderateComments: boolean
+  publicBrowsing: boolean
+  loginAttempts: number
+  sessionDays: number
+  defaultVisibility: 'draft' | 'published' | 'public'
+  defaultGroupIds: number[]
+}
+
+export interface Group {
+  id: number
+  name: string
+  description: string
+  perms: Partial<Perms>
+  limits: Partial<Limits>
+  priority: number
+  members: number
+  createdAt: number
+}
+
+export interface Notification {
+  id: number
+  userId: number | null
+  kind: string
+  title: string
+  body: string
+  data: Record<string, unknown>
+  actor: { id: number; username: string; displayName: string } | null
+  readAt: number | null
+  createdAt: number
+}
+
+export interface NewAlbumEntry {
+  id: number
+  slug: string
+  title: string
+  visibility: Visibility
+  createdAt: number
+  updatedAt: number
+  gallery: { id: number; title: string }
+  user: { id: number; username: string; displayName: string; email: string; phone: string; avatarUrl: string | null }
+  photos: number
+  videos: number
+  bytes: number
+  coverUrl: string | null
+  seen: boolean
+}
+
+export interface TreeFile {
+  id: number
+  title: string
+  kind: string
+  size: number
+  thumbUrl: string | null
+  url: string
+  createdAt: number
+}
+export interface TreeAlbum {
+  id: number
+  slug: string
+  title: string
+  visibility: string
+  photos: number
+  videos: number
+  bytes: number
+  updatedAt: number
+  files?: TreeFile[]
+}
+export interface TreeGallery {
+  id: number
+  slug: string
+  title: string
+  isPrimary: boolean
+  coverUrl: string | null
+  albums: TreeAlbum[]
+}
+export interface TreeUser {
+  id: number
+  username: string
+  displayName: string
+  role: string
+  email: string
+  phone: string
+  avatarUrl: string | null
+  galleries: TreeGallery[]
+}
+
+export interface TimelineItem extends MediaItem {
+  album: { slug: string; title: string }
+  day: string
 }
 
 export interface Session {
@@ -117,6 +243,8 @@ export interface MediaItem {
   likes: number
   comments: number
   liked: boolean
+  reactions: { emoji: string; count: number }[]
+  myReaction: string | null
 }
 
 export type Visibility = 'published' | 'draft' | 'public'
@@ -146,6 +274,9 @@ export interface Gallery {
   isMine: boolean
   splash: MediaItem | null
   splashMediaId: number | null
+  coverUrl: string | null
+  isPrimary: boolean
+  sortOrder: number
   themeId: number | null
   publicAlbumId: number | null
   publicAlbum: { id: number; slug: string; title: string } | null

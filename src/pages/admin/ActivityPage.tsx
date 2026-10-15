@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Activity, Database, Search, Trash2 } from 'lucide-react'
+import { Activity, Database, Download, Search, Trash2 } from 'lucide-react'
 import { api } from '../../api/client'
 import { useActivity, useActivityKinds, useActivityPartitions } from '../../api/hooks'
 import type { ActivityEvent } from '../../api/types'
@@ -147,6 +147,9 @@ export function ActivityPage() {
     },
     onError: (e: Error) => notify(e.message, 'error'),
   })
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
+  const exportUrl = `/api/activity/export.csv?${new URLSearchParams({ ...(from ? { from: String(new Date(from + 'T00:00:00').getTime()) } : {}), ...(to ? { to: String(new Date(to + 'T23:59:59.999').getTime()) } : {}), ...(userId ? { userId: String(userId) } : {}), ...(kind ? { kind } : {}) }).toString()}`
   const totalBytes = (parts ?? []).reduce((n, p) => n + p.bytes, 0)
   const totalEvents = (parts ?? []).reduce((n, p) => n + p.events, 0)
 
@@ -248,6 +251,26 @@ export function ActivityPage() {
           </div>
         )}
       </div>
+
+      <section className="card stack" style={{ gap: 10 }}>
+        <h3 style={{ margin: 0 }}>
+          <Download size={15} /> Export to CSV
+        </h3>
+        <p className="muted small" style={{ margin: 0 }}>Pick a date range (inclusive). The current account and kind filters above are applied too. Opens in a spreadsheet; up to 100,000 rows.</p>
+        <div className="row" style={{ gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <label className="field">
+            <span className="small">From</span>
+            <input className="input" type="date" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="From date" />
+          </label>
+          <label className="field">
+            <span className="small">To</span>
+            <input className="input" type="date" value={to} onChange={(e) => setTo(e.target.value)} aria-label="To date" />
+          </label>
+          <a className="btn primary" href={exportUrl} download>
+            <Download size={14} /> Download CSV
+          </a>
+        </div>
+      </section>
 
       <section className="card stack" style={{ gap: 10 }}>
         <h3 style={{ margin: 0 }}>

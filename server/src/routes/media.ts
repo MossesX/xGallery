@@ -10,6 +10,9 @@ import { HttpError, num, parseJson, str, wrap, IdRow } from '../util.js'
 import { commentJson, mediaJson } from '../serialize.js'
 import { canManageGallery, canViewAlbum } from '../access.js'
 import { track } from '../activity.js'
+import { notify } from '../notifications.js'
+import { getPolicy } from '../policy.js'
+import { visibleAlbumRows } from '../access.js'
 
 export const mediaRouter = Router()
 
@@ -78,8 +81,56 @@ function canView(req: import('express').Request, row: Record<string, unknown>): 
 function requireManage(req: import('express').Request, albumId: number): void {
   const album = db.prepare('SELECT gallery_id FROM albums WHERE id = ?').get(albumId) as { gallery_id: number } | undefined
   if (!album) throw new HttpError(404, 'Album not found')
-  if (!canManageGallery(req.user, album.gallery_id)) throw new HttpError(403, 'This album belongs to another gallery')
+  if (canManageGallery(req.user, album.gallery_id)) return
+  if (db.prepare('SELECT 1 FROM album_collaborators WHERE album_id = ? AND user_id = ?').get(albumId, req.user!.id)) return
+  throw new HttpError(403, 'This album belongs to another gallery')
 }
+
+/* ---------- reactions + timeline ---------- */
+
+const EMOJI = ['❤️', '👍', '😂', '😮', '😢', '🔥', '👏', '🎉']
+
+mediaRouter.post(
+  '/media/:id/react',
+  requireUser,
+  requirePerm('canReact'),
+  wrap((req, res) => {
+    const row = loadMedia(Number(req.params.id))
+    if (!canView(req, row)) throw new HttpError(404, 'Not available')
+    const emoji = str(req.body?.emoji, 8)
+    if (emoji && !EMOJI.includes(emoji)) throw new HttpError(400, 'Unknown reaction')
+    if (!emoji) db.prepare('DELETE FROM reactions WHERE user_id = ? AND media_id = ?').run(req.user!.id, row.id)
+    else {
+      db.prepare('INSERT INTO reactions(user_id, media_id, emoji, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(user_id, media_id) DO UPDATE SET emoji = excluded.emoji, created_at = excluded.created_at').run(req.user!.id, row.id, emoji, now())
+      const owner = db.prepare('SELECT g.owner_user_id o, a.slug s FROM albums a JOIN galleries g ON g.id = a.gallery_id WHERE a.id = ?').get(row.album_id as number) as { o: number; s: string } | undefined
+      if (owner && owner.o !== req.user!.id) notify({ userId: owner.o, kind: 'media.reaction', title: `${req.user!.display_name} reacted ${emoji} to “${row.title}”`, actorId: req.user!.id, data: { mediaId: row.id, albumSlug: owner.s, emoji } })
+    }
+    track(req, emoji ? 'media.react' : 'media.unreact', { targetType: 'media', targetId: row.id as number, targetLabel: String(row.title ?? ''), detail: { emoji } })
+    res.json({ media: mediaJson(loadMedia(row.id as number), req.user!.id), emoji: EMOJI })
+  }),
+)
+
+/** Google-Photos style timeline: everything the member may see, newest first, with day grouping keys. */
+mediaRouter.get(
+  '/media/timeline',
+  requireUser,
+  wrap((req, res) => {
+    const before = req.query.before ? Number(req.query.before) : Date.now() + 1
+    const limit = Math.min(400, Number(req.query.limit) || 120)
+    const kind = str(req.query.kind, 10)
+    const q = str(req.query.q, 80).toLowerCase()
+    const albums = visibleAlbumRows(req.user!).map((r) => r.id as number)
+    if (!albums.length) return res.json({ items: [], nextBefore: null })
+    const marks = albums.map(() => '?').join(',')
+    const rows = db
+      .prepare(`SELECT m.*, a.slug AS album_slug, a.title AS album_title FROM media m JOIN albums a ON a.id = m.album_id WHERE m.album_id IN (${marks}) AND m.created_at < ? ${kind ? 'AND m.kind = ?' : ''} ORDER BY m.created_at DESC, m.id DESC LIMIT ?`)
+      .all(...albums, before, ...(kind ? [kind] : []), limit) as IdRow[]
+    const items = rows
+      .filter((r) => !q || `${r.title} ${r.description} ${r.album_title}`.toLowerCase().includes(q))
+      .map((r) => ({ ...mediaJson(r, req.user!.id), album: { slug: r.album_slug, title: r.album_title }, day: new Date(r.created_at as number).toISOString().slice(0, 10) }))
+    res.json({ items, nextBefore: rows.length >= limit ? (rows[rows.length - 1].created_at as number) : null })
+  }),
+)
 
 /* ---------- upload (admin) ---------- */
 
@@ -94,6 +145,18 @@ mediaRouter.post(
     const mime = str(req.headers['content-type'], 100) || 'application/octet-stream'
     const kind = mime.startsWith('video/') ? 'video' : mime.startsWith('image/') ? 'image' : null
     if (!kind) throw new HttpError(415, `Unsupported file type: ${mime}`)
+    const policy = getPolicy()
+    if (!policy.allowedTypes.some((t) => mime.startsWith(t))) throw new HttpError(415, `The owner does not allow ${mime} uploads`)
+    const declaredBytes = Number(req.headers['content-length'] ?? 0)
+    const maxMb = req.user!.limits.maxUploadMb
+    if (maxMb > 0 && declaredBytes > maxMb * 1024 * 1024) throw new HttpError(413, `Files may be at most ${maxMb} MB for your account`)
+    const quotaMb = req.user!.limits.storageQuotaMb
+    if (quotaMb > 0) {
+      const used = (db.prepare('SELECT COALESCE(SUM(m.size), 0) s FROM media m JOIN albums a ON a.id = m.album_id JOIN galleries g ON g.id = a.gallery_id WHERE g.owner_user_id = ?').get(req.user!.id) as { s: number }).s
+      if (used + declaredBytes > quotaMb * 1024 * 1024) throw new HttpError(413, `Storage quota reached (${quotaMb} MB). Delete something or ask the owner for more.`)
+    }
+    const perAlbum = req.user!.limits.maxMediaPerAlbum
+    if (perAlbum > 0 && (db.prepare('SELECT COUNT(*) c FROM media WHERE album_id = ?').get(albumId) as { c: number }).c >= perAlbum) throw new HttpError(403, `Albums may hold ${perAlbum} items for your account`)
     const name = str(meta.fileName, 200) || 'upload'
     const rel = path.join(String(albumId), `${now()}-${randomBytes(4).toString('hex')}${extFor(mime, name)}`)
     const size = await streamToFile(req, rel)
@@ -136,6 +199,7 @@ mediaRouter.get(
   wrap((req, res) => {
     const row = loadMedia(Number(req.params.id))
     if (!canView(req, row)) throw new HttpError(req.user ? 404 : 401, 'Not available')
+    if (req.query.download != null && req.user && !req.user.perms.canDownload) throw new HttpError(403, 'Your account is not allowed to download originals. Ask the owner.')
     const dl = req.query.download != null ? `${(row.title as string) || 'media'}${path.extname(row.file_path as string)}` : undefined
     sendFile(res, row.file_path as string, row.mime as string, dl)
   }),
@@ -215,6 +279,10 @@ mediaRouter.post(
     if (existing) db.prepare('DELETE FROM likes WHERE id = ?').run((existing as { id: number }).id)
     else db.prepare('INSERT INTO likes(user_id, media_id, created_at) VALUES (?, ?, ?)').run(req.user!.id, row.id, now())
     track(req, existing ? 'media.unlike' : 'media.like', { targetType: 'media', targetId: row.id as number, targetLabel: String(row.title ?? '') })
+    if (!existing) {
+      const owner = db.prepare('SELECT g.owner_user_id o, a.slug s, a.title t FROM albums a JOIN galleries g ON g.id = a.gallery_id WHERE a.id = ?').get(row.album_id as number) as { o: number; s: string; t: string } | undefined
+      if (owner && owner.o !== req.user!.id) notify({ userId: owner.o, kind: 'media.like', title: `${req.user!.display_name} liked “${row.title || owner.t}”`, actorId: req.user!.id, data: { mediaId: row.id, albumSlug: owner.s } })
+    }
     res.json({ media: mediaJson(loadMedia(row.id as number), req.user!.id) })
   }),
 )
@@ -244,6 +312,8 @@ mediaRouter.post(
     const info = db.prepare('INSERT INTO comments(user_id, media_id, body, created_at) VALUES (?, ?, ?, ?)').run(req.user!.id, row.id, body, now())
     const c = db.prepare('SELECT c.*, u.display_name, u.username, u.avatar_path FROM comments c JOIN users u ON u.id = c.user_id WHERE c.id = ?').get(info.lastInsertRowid as number) as IdRow
     track(req, 'comment.media', { targetType: 'media', targetId: row.id as number, targetLabel: String(row.title ?? ''), detail: { body: String(c.body ?? '').slice(0, 140) } })
+    const ownerRow = db.prepare('SELECT g.owner_user_id o, a.slug s FROM albums a JOIN galleries g ON g.id = a.gallery_id WHERE a.id = ?').get(row.album_id as number) as { o: number; s: string } | undefined
+    if (ownerRow && ownerRow.o !== req.user!.id) notify({ userId: ownerRow.o, kind: 'comment.media', title: `${req.user!.display_name} commented on “${row.title}”`, body: String(c.body ?? '').slice(0, 200), actorId: req.user!.id, data: { mediaId: row.id, albumSlug: ownerRow.s } })
     res.status(201).json({ comment: commentJson(c) })
   }),
 )

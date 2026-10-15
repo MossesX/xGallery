@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ExternalLink, Globe, GripVertical, Plus, Star, Trash2 } from 'lucide-react'
 import { api } from '../../api/client'
-import { useAlbums, useMe } from '../../api/hooks'
+import { useAlbums, useGalleries, useMe } from '../../api/hooks'
 import type { Album } from '../../api/types'
 import { Modal } from '../../components/Modal'
 import { MediaThumb } from '../../components/MediaThumb'
@@ -19,6 +19,9 @@ export function AlbumsPage() {
   const [open, setOpen] = useState(false)
   const [title, setTitle] = useState('')
   const [makePublic, setMakePublic] = useState(false)
+  const [newGalleryId, setNewGalleryId] = useState<number | ''>('')
+  const { data: galleriesAll } = useGalleries()
+  const myGalleries = (galleriesAll ?? []).filter((g) => g.isMine)
   const [dragId, setDragId] = useState<number | null>(null)
   // One entry per gallery the admin manages (usually one): its current public album, if any.
   const galleries = list.reduce<{ id: number; title: string; hook: Album | null; albums: Album[] }[]>((acc, a) => {
@@ -39,7 +42,7 @@ export function AlbumsPage() {
   }
 
   const create = useMutation({
-    mutationFn: () => api.post<{ album: Album }>('/api/albums', { title, makePublic: noPublicAlbum && makePublic }),
+    mutationFn: () => api.post<{ album: Album }>('/api/albums', { title, makePublic: noPublicAlbum && makePublic, galleryId: newGalleryId || undefined }),
     onSuccess: (r) => {
       refresh()
       qc.invalidateQueries({ queryKey: ['galleries'] })
@@ -241,6 +244,19 @@ export function AlbumsPage() {
             <label>Title</label>
             <input className="input" autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Summer in Lisbon" />
           </div>
+          {myGalleries.length > 1 && (
+            <div className="field">
+              <label>Gallery</label>
+              <select className="select" value={newGalleryId} onChange={(e) => setNewGalleryId(e.target.value ? Number(e.target.value) : '')}>
+                {myGalleries.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.title}
+                    {g.isPrimary ? ' · primary' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           {noPublicAlbum && (
             <label className="checkbox public-option">
               <input type="checkbox" checked={makePublic} onChange={(e) => setMakePublic(e.target.checked)} />

@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, NavLink, useNavigate, useSearchParams } from 'react-router-dom'
-import { Bookmark, Eye, LogIn, LogOut, MessageCircle, Search, Settings2, Sparkles, UserPlus } from 'lucide-react'
-import { useAiStatus, useLogout, useMe, useSession, useSettings, useUnread } from '../api/hooks'
+import { Bell, Bookmark, Eye, Images, LayoutGrid, LogIn, LogOut, MessageCircle, Search, Settings2, Sparkles, UserPlus } from 'lucide-react'
+import { useAiStatus, useLogout, useMe, useNotifUnread, useSession, useSettings, useUnread } from '../api/hooks'
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
 import { ColorModeToggle } from './ColorModeToggle'
@@ -29,6 +29,7 @@ export function Banner() {
   const { data: unread } = useUnread(!!user)
   const { data: ai } = useAiStatus(!!user)
   const { data: session } = useSession(!!user)
+  const { data: notif } = useNotifUnread(!!user)
   const qc = useQueryClient()
   const returnToOwner = () => api.post('/api/auth/return', {}).then(() => { qc.clear(); window.location.assign('/admin/users') })
   const openAssistant = useUI((s) => s.openAssistant)
@@ -73,6 +74,11 @@ export function Banner() {
           </NavLink>
           <NavLink to={user ? '/galleries' : '/public'}>{user ? 'Galleries' : 'People'}</NavLink>
           {user && (
+            <NavLink to="/photos">
+              <LayoutGrid size={13} /> Photos
+            </NavLink>
+          )}
+          {user && (
             <NavLink to="/favorites">
               <Bookmark size={13} /> Saved
             </NavLink>
@@ -97,6 +103,24 @@ export function Banner() {
         )}
         <div className="banner-right">
           <Clock />
+          {user && (
+            <NavLink to="/me/notifications" className="btn ghost icon sm banner-bell" title="Notifications" aria-label="Notifications">
+              <Bell size={16} />
+              {!!notif?.unread && <span className="nav-badge bell-badge">{notif.unread}</span>}
+            </NavLink>
+          )}
+          {user?.role === 'owner' && (
+            <NavLink to="/admin/new-albums" className="btn ghost icon sm banner-bell" title="New albums" aria-label="New albums">
+              <Images size={16} />
+              {!!notif?.admin?.albums && <span className="nav-badge bell-badge">{notif.admin.albums}</span>}
+            </NavLink>
+          )}
+          {user?.role === 'owner' && (
+            <NavLink to="/admin/notifications" className="btn ghost icon sm banner-bell" title="Admin notifications" aria-label="Admin notifications">
+              <Settings2 size={16} />
+              {!!notif?.admin?.total && <span className="nav-badge bell-badge">{notif.admin.total}</span>}
+            </NavLink>
+          )}
           {user && ai?.allowed && (
             <button className="btn sm banner-ai" onClick={() => openAssistant({ context: { url: location.pathname, title: document.title } })} title={`${ai.assistantName} · Ctrl/⌘ J`}>
               <Sparkles size={14} /> {ai.assistantName}
