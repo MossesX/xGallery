@@ -28,6 +28,7 @@ import { TerminalPage } from './pages/dev/ops/TerminalPage'
 import { VpsPage } from './pages/dev/vps/VpsPage'
 import { GithubPage } from './pages/dev/github/GithubPage'
 import { CommanderPage } from './pages/dev/commander/CommanderPage'
+import { SetupPage } from './pages/dev/setup/SetupWizard'
 import { TasksSettingsPage } from './pages/dev/tasks/TasksSettingsPage'
 import { TasksWorkspace } from './pages/dev/tasks/TasksWorkspace'
 import { DevContextMenuPage, DevCssPage, DevFeaturesPage, DevFooterPage, DevHomePage, DevLayoutPage, DevNavigationPage, DevToolbarPage } from './pages/dev/DevDesignPages'
@@ -149,6 +150,7 @@ export default function App() {
                   <Route path="vps" element={<VpsPage />} />
                   <Route path="github" element={<GithubPage />} />
                   <Route path="commander" element={<CommanderPage />} />
+                  <Route path="setup" element={<SetupPage />} />
                   <Route path="themes" element={<ThemesPage />} />
                   <Route path="appearance" element={<AppearancePage />} />
                   <Route path="navigation" element={<DevNavigationPage />} />

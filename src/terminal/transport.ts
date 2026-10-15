@@ -94,6 +94,11 @@ interface NativeSshBridge {
   publicKey(): string
   generateKey(): string
   openTermux(command: string): boolean
+  /** Newer app builds only. */
+  openUrl?(url: string): boolean
+  isInstalled?(packageName: string): boolean
+  openApp?(packageName: string): boolean
+  copy?(text: string): boolean
 }
 
 declare global {

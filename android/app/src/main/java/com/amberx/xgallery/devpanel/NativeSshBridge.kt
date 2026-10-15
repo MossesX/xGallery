@@ -2,6 +2,7 @@ package com.amberx.xgallery.devpanel
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import androidx.security.crypto.EncryptedSharedPreferences
@@ -132,5 +133,43 @@ class NativeSshBridge(private val context: Context, private val web: WebView) {
                 true
             } else false
         }
+    }
+
+    /** Open a web page in the phone's browser (hPanel API page, GitHub tokens, F-Droid…). */
+    @JavascriptInterface
+    fun openUrl(url: String): Boolean {
+        return try {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /** Whether an app (e.g. com.termux) is installed. */
+    @JavascriptInterface
+    fun isInstalled(packageName: String): Boolean {
+        return try {
+            context.packageManager.getPackageInfo(packageName, 0)
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /** Bring an installed app to the front. */
+    @JavascriptInterface
+    fun openApp(packageName: String): Boolean {
+        val launch = context.packageManager.getLaunchIntentForPackage(packageName) ?: return false
+        context.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        return true
+    }
+
+    /** Put text on the clipboard (for apps that cannot be driven directly). */
+    @JavascriptInterface
+    fun copy(text: String): Boolean {
+        val clip = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        clip.setPrimaryClip(android.content.ClipData.newPlainText("xgallery", text))
+        return true
     }
 }

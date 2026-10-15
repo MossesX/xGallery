@@ -1,6 +1,6 @@
-import { useEffect, useState, type FormEvent } from 'react'
-import { Link, NavLink, useNavigate, useSearchParams } from 'react-router-dom'
-import { Bell, Eye, Images, LogIn, LogOut, Search, Settings2, Sparkles, UserPlus } from 'lucide-react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { Link, NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { Bell, Eye, Images, LogIn, LogOut, Menu as MenuIcon, Search, Settings2, Sparkles, UserPlus, X } from 'lucide-react'
 import { useAiStatus, useLogout, useMe, useNotifUnread, useSession, useSettings, useUnread } from '../api/hooks'
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
@@ -62,11 +62,28 @@ export function Banner() {
   const { data } = useSettings()
   const logout = useLogout()
   const navigate = useNavigate()
+  const location = useLocation()
   const [params] = useSearchParams()
   const [q, setQ] = useState(params.get('q') ?? '')
   useEffect(() => setQ(params.get('q') ?? ''), [params])
   const s = data?.settings
   const tb = ui.toolbar
+  const [menu, setMenu] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!menu) return
+    const onDown = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenu(false)
+    }
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setMenu(false)
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [menu])
+  useEffect(() => setMenu(false), [location.pathname])
 
   const search = (e: FormEvent) => {
     e.preventDefault()
@@ -167,6 +184,97 @@ export function Banner() {
                 <LogIn size={13} /> Sign in
               </Link>
             </>
+          )}
+        </div>
+        <div className="banner-menu" ref={menuRef} data-banner-menu={menu ? 'open' : 'closed'}>
+          <button className="btn ghost icon sm banner-menu-btn" onClick={() => setMenu((m) => !m)} aria-label="Menu" aria-expanded={menu} title="Menu" data-banner-menu-btn="">
+            {menu ? <X size={18} /> : <MenuIcon size={18} />}
+            {!menu && !!(unread?.messages || notif?.unread || (user?.role === 'owner' && notif?.admin?.total)) && <span className="nav-badge bell-badge" />}
+          </button>
+          {menu && (
+            <div className="banner-menu-panel" role="menu" data-banner-menu-panel="">
+              {navItems.length > 0 && (
+                <div className="banner-menu-section">
+                  <div className="eyebrow">Go to</div>
+                  {navItems.map((l) => (
+                    <UiLinkEl key={l.id} link={l} className="banner-menu-item">
+                      <UiIcon name={l.icon} /> {l.label}
+                      {l.to === '/me/messages' && !!unread?.messages && <span className="nav-badge">{unread.messages}</span>}
+                      {l.to === '/admin' && !!notif?.admin?.total && user?.role === 'owner' && <span className="nav-badge">{notif.admin.total}</span>}
+                    </UiLinkEl>
+                  ))}
+                </div>
+              )}
+              {user && (tb.bell || (user.role === 'owner' && (tb.newAlbums || tb.adminBell)) || (ai?.allowed && tb.assistant) || tb.buttons.some((b) => b.enabled && visibleTo(b.show, user))) && (
+                <div className="banner-menu-section">
+                  <div className="eyebrow">Tools</div>
+                  {tb.bell && (
+                    <NavLink to="/me/notifications" className="banner-menu-item">
+                      <Bell size={15} /> Notifications {!!notif?.unread && <span className="nav-badge">{notif.unread}</span>}
+                    </NavLink>
+                  )}
+                  {user.role === 'owner' && tb.newAlbums && (
+                    <NavLink to="/admin/new-albums" className="banner-menu-item">
+                      <Images size={15} /> New albums {!!notif?.admin?.albums && <span className="nav-badge">{notif.admin.albums}</span>}
+                    </NavLink>
+                  )}
+                  {user.role === 'owner' && tb.adminBell && (
+                    <NavLink to="/admin/notifications" className="banner-menu-item">
+                      <Settings2 size={15} /> Admin notifications {!!notif?.admin?.total && <span className="nav-badge">{notif.admin.total}</span>}
+                    </NavLink>
+                  )}
+                  {ai?.allowed && tb.assistant && (
+                    <button className="banner-menu-item" onClick={() => { setMenu(false); openAssistant({ context: { url: location.pathname, title: document.title } }) }}>
+                      <Sparkles size={15} /> {ai.assistantName}
+                    </button>
+                  )}
+                  {tb.buttons.filter((b) => b.enabled && visibleTo(b.show, user)).map((b) => (
+                    <UiLinkEl key={b.id} link={b} className="banner-menu-item" />
+                  ))}
+                </div>
+              )}
+              <div className="banner-menu-section">
+                <div className="eyebrow">Account</div>
+                {user ? (
+                  <>
+                    <NavLink to="/me" className="banner-menu-item">
+                      <Avatar name={user.display_name} size={20} src={user.avatarUrl} /> {user.display_name}
+                    </NavLink>
+                    {user.role === 'owner' && (
+                      <NavLink to="/dev" className="banner-menu-item">
+                        <Settings2 size={15} /> Developer panel
+                      </NavLink>
+                    )}
+                    {tb.colorMode && (
+                      <div className="banner-menu-item static">
+                        <ColorModeToggle /> <span>Light / dark</span>
+                      </div>
+                    )}
+                    {tb.signOut && (
+                      <button className="banner-menu-item" onClick={() => logout.mutateAsync().then(() => navigate('/'))}>
+                        <LogOut size={15} /> Sign out
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {tb.colorMode && (
+                      <div className="banner-menu-item static">
+                        <ColorModeToggle /> <span>Light / dark</span>
+                      </div>
+                    )}
+                    {ui.flags.requestAccount !== false && (
+                      <Link to="/request-account" className="banner-menu-item">
+                        <UserPlus size={15} /> Request account
+                      </Link>
+                    )}
+                    <Link to="/login" className="banner-menu-item">
+                      <LogIn size={15} /> Sign in
+                    </Link>
+                  </>
+                )}
+              </div>
+            </div>
           )}
         </div>
       </div>

@@ -55,6 +55,23 @@ site. Members sign in to browse, like and comment.
   shell · mosh, where each command is wrapped into the profile's mosh invocation to copy, download
   or hand to Termux.
 
+**One-click setup (Auto setup switch)**
+- The developer panel shows an *Auto setup* switch at the top once it has probed the server. Flip it
+  and the wizard configures everything on its own: panel SSH key, the phone's key (inside the Android
+  app), installing all keys on the VPS (asks for the root password once, never stores it, then uses
+  keys only), mosh + the UDP range in ufw, tmux, Claude Code on the VPS, Termux on the phone (opens
+  F-Droid when missing, hands Termux an enrolment script that generates a key and uploads it through a
+  single-use token, then installs that key on the server), the Hostinger token (VM picked
+  automatically), the GitHub token (repository set, webhook installed) and the assistant's Claude token.
+- It only stops for what it genuinely needs from you; every step is logged on the developer session.
+  Re-running is safe: present parts are skipped. Operations → Servers & code → One-click setup.
+
+**Navigation**
+- The developer panel's menu is three collapsible groups (Developer, Site builder, Operations) with
+  sub-menus (Look & feel, Menus & pages, Servers & code, Shell & phone, …) that remember their state;
+  on phones the whole panel menu becomes one "Go to…" combo. The site banner folds its navigation and
+  toolbar into a sectioned menu (Go to / Tools / Account) on narrow screens.
+
 **Owner password recovery**
 - Forgot the owner password? Set the `RESET_OWNER_PASSWORD` repository secret (8+ characters) and
   deploy: the owner account gets that password once, every session is ended, and a note lands in the

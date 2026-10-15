@@ -24,6 +24,7 @@ import { tasksRouter } from './routes/tasks.js'
 import { vpsRouter } from './routes/vps.js'
 import { githubRouter, githubWebhookRouter } from './routes/github.js'
 import { startGithubPolling } from './github/snapshot.js'
+import { setupPublicRouter, setupRouter } from './routes/setup.js'
 import { attachDev, sweepDevSessions } from './dev.js'
 import { adminRouter } from './routes/admin.js'
 
@@ -68,7 +69,7 @@ app.use('/api', attachDev)
 // Sign-in, the shell's settings, account/contact requests, themes and private share links stay open.
 app.use('/api', (req, res, next) => {
   if (req.user || getPolicy().publicBrowsing) return next()
-  const open = req.path.startsWith('/auth') || req.path.startsWith('/settings') || req.path.startsWith('/inbox') || req.path.startsWith('/share') || req.path.startsWith('/themes') || req.path.startsWith('/github/webhook') || (req.path.startsWith('/media/') && req.query.s != null)
+  const open = req.path.startsWith('/auth') || req.path.startsWith('/settings') || req.path.startsWith('/inbox') || req.path.startsWith('/share') || req.path.startsWith('/themes') || req.path.startsWith('/github/webhook') || req.path.startsWith('/setup/termux-key') || (req.path.startsWith('/media/') && req.query.s != null)
   if (open) return next()
   res.status(401).json({ error: 'Sign in to browse this site', code: 'login_required' })
 })
@@ -91,6 +92,8 @@ app.use('/api/admin', adminRouter)
 app.use('/api/dev/tasks', tasksRouter)
 app.use('/api/dev/vps', vpsRouter)
 app.use('/api/dev/github', githubRouter)
+app.use('/api/dev/setup', setupRouter)
+app.use('/api/setup', setupPublicRouter)
 app.use('/api/dev', devRouter)
 app.use('/api/themes', themesRouter)
 app.use('/api/settings', settingsRouter)

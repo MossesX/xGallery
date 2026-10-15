@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Link, NavLink, Navigate, Outlet, useLocation } from 'react-router-dom'
+import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Braces, Code2, FolderTree, Gauge, FolderGit2, History, KeyRound, LayoutTemplate, LifeBuoy, ListTodo, Lock, Menu, MousePointerClick, Palette, PanelBottom, PanelTop, Plug, Ruler, ScrollText, Server, Settings2, ShieldAlert, SlidersHorizontal, Smartphone, Sparkles, TerminalSquare, ToggleLeft, Unlock, Wand2, WifiOff } from 'lucide-react'
+import { Braces, ChevronDown, ChevronRight, Code2, FolderTree, Gauge, FolderGit2, History, KeyRound, LayoutTemplate, LifeBuoy, ListChecks, ListTodo, Lock, Menu, MousePointerClick, Palette, PanelBottom, PanelTop, Plug, Ruler, ScrollText, Server, Settings2, ShieldAlert, SlidersHorizontal, Smartphone, Sparkles, TerminalSquare, ToggleLeft, Unlock, Wand2, WifiOff } from 'lucide-react'
 import { offlineState } from '../../api/client'
 
 /** "You are offline" / "showing cached data" bar for the panel (the service worker serves the last good copy). */
@@ -35,36 +35,209 @@ import { devKeys, useDevStatus } from '../../api/dev'
 import { PageLoader } from '../../components/Skeleton'
 import { useUI } from '../../store/ui'
 import { isSafeMode } from '../../ui/config'
+import { AutoSetupSwitch } from './setup/SetupWizard'
 
-const LINKS = [
-  { to: '/dev', label: 'Overview', icon: Gauge, end: true },
-  { to: '/dev/assistant', label: 'Developer AI', icon: Sparkles },
-  { to: '/dev/code', label: 'Code editor', icon: Code2 },
-  { to: '/dev/restore', label: 'Checkpoints & restore', icon: History },
-  { to: '/dev/sessions', label: 'Session log', icon: ScrollText },
-  { to: '/dev/tasks', label: 'Task manager', icon: ListTodo },
+interface NavItem { to: string; label: string; icon: typeof Gauge; end?: boolean }
+interface NavSub { id: string; label: string; items: NavItem[] }
+interface NavGroup { id: string; label: string; icon: typeof Gauge; items?: NavItem[]; subs?: NavSub[] }
+
+/** The developer navigation: three collapsible groups, the busy ones split into sub-menus. */
+const NAV: NavGroup[] = [
+  {
+    id: 'dev',
+    label: 'Developer',
+    icon: Gauge,
+    items: [
+      { to: '/dev', label: 'Overview', icon: Gauge, end: true },
+      { to: '/dev/assistant', label: 'Developer AI', icon: Sparkles },
+      { to: '/dev/code', label: 'Code editor', icon: Code2 },
+      { to: '/dev/restore', label: 'Checkpoints & restore', icon: History },
+      { to: '/dev/sessions', label: 'Session log', icon: ScrollText },
+      { to: '/dev/tasks', label: 'Task manager', icon: ListTodo },
+    ],
+  },
+  {
+    id: 'design',
+    label: 'Site builder',
+    icon: Palette,
+    subs: [
+      {
+        id: 'look',
+        label: 'Look & feel',
+        items: [
+          { to: '/dev/themes', label: 'Themes', icon: Palette },
+          { to: '/dev/appearance', label: 'Appearance & layouts', icon: SlidersHorizontal },
+          { to: '/dev/layout', label: 'Layout & density', icon: Ruler },
+          { to: '/dev/css', label: 'Custom CSS', icon: Braces },
+        ],
+      },
+      {
+        id: 'chrome',
+        label: 'Menus & pages',
+        items: [
+          { to: '/dev/navigation', label: 'Navigation menu', icon: Menu },
+          { to: '/dev/toolbar', label: 'Toolbar', icon: PanelTop },
+          { to: '/dev/footer', label: 'Footer', icon: PanelBottom },
+          { to: '/dev/home', label: 'Home page builder', icon: LayoutTemplate },
+          { to: '/dev/context-menu', label: 'Context menu', icon: MousePointerClick },
+        ],
+      },
+      { id: 'behaviour', label: 'Behaviour', items: [{ to: '/dev/features', label: 'Feature switches', icon: ToggleLeft }] },
+    ],
+  },
+  {
+    id: 'ops',
+    label: 'Operations',
+    icon: Server,
+    subs: [
+      {
+        id: 'servers',
+        label: 'Servers & code',
+        items: [
+          { to: '/dev/setup', label: 'One-click setup', icon: Wand2 },
+          { to: '/dev/vps', label: 'VPS manager', icon: Server },
+          { to: '/dev/github', label: 'GitHub manager', icon: FolderGit2 },
+          { to: '/dev/commander', label: 'Filesystem commander', icon: FolderTree },
+        ],
+      },
+      {
+        id: 'shell',
+        label: 'Shell & phone',
+        items: [
+          { to: '/dev/terminal', label: 'Terminal · SSH', icon: Plug },
+          { to: '/dev/shell', label: 'Remote shell · mosh', icon: TerminalSquare },
+          { to: '/dev/ops', label: 'Command wizard', icon: ListChecks },
+          { to: '/dev/android', label: 'Android app', icon: Smartphone },
+        ],
+      },
+    ],
+  },
 ]
-const OPS = [
-  { to: '/dev/vps', label: 'VPS manager', icon: Server },
-  { to: '/dev/github', label: 'GitHub manager', icon: FolderGit2 },
-  { to: '/dev/commander', label: 'Filesystem commander', icon: FolderTree },
-  { to: '/dev/terminal', label: 'Terminal · SSH', icon: Plug },
-  { to: '/dev/ops', label: 'Command wizard', icon: Wand2 },
-  { to: '/dev/shell', label: 'Remote shell · mosh', icon: TerminalSquare },
-  { to: '/dev/android', label: 'Android app', icon: Smartphone },
-]
-const DESIGN = [
-  { to: '/dev/themes', label: 'Themes', icon: Palette },
-  { to: '/dev/appearance', label: 'Appearance & layouts', icon: SlidersHorizontal },
-  { to: '/dev/navigation', label: 'Navigation menu', icon: Menu },
-  { to: '/dev/toolbar', label: 'Toolbar', icon: PanelTop },
-  { to: '/dev/footer', label: 'Footer', icon: PanelBottom },
-  { to: '/dev/home', label: 'Home page builder', icon: LayoutTemplate },
-  { to: '/dev/context-menu', label: 'Context menu', icon: MousePointerClick },
-  { to: '/dev/layout', label: 'Layout & density', icon: Ruler },
-  { to: '/dev/css', label: 'Custom CSS', icon: Braces },
-  { to: '/dev/features', label: 'Feature switches', icon: ToggleLeft },
-]
+const allItems = (g: NavGroup): NavItem[] => g.items ?? g.subs!.flatMap((x) => x.items)
+const matches = (item: NavItem, path: string) => (item.end ? path === item.to : path === item.to || path.startsWith(`${item.to}/`))
+
+const NAV_KEY = 'xg-dev-nav'
+function readOpen(): Record<string, boolean> {
+  try {
+    return JSON.parse(localStorage.getItem(NAV_KEY) ?? '{}') as Record<string, boolean>
+  } catch {
+    return {}
+  }
+}
+
+/** Collapsible groups + sub-menus on wide screens; one "Go to…" combo on phones. */
+function DevNav({ designMode, onDesignMode, onLock, locking, chips }: { designMode: boolean; onDesignMode: () => void; onLock: () => void; locking: boolean; chips: React.ReactNode }) {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const path = location.pathname
+  const [open, setOpen] = useState<Record<string, boolean>>(readOpen)
+  // The group (and sub-menu) holding the current page is always open.
+  const activeGroup = NAV.find((g) => allItems(g).some((i) => matches(i, path)))
+  const activeSub = activeGroup?.subs?.find((x) => x.items.some((i) => matches(i, path)))
+  const isOpen = (id: string, fallback: boolean) => (id in open ? open[id] : fallback)
+  const toggle = (id: string, fallback: boolean) => {
+    const next = { ...open, [id]: !isOpen(id, fallback) }
+    setOpen(next)
+    try {
+      localStorage.setItem(NAV_KEY, JSON.stringify(next))
+    } catch {
+      /* ignore */
+    }
+  }
+  const current = NAV.flatMap(allItems).find((i) => matches(i, path))?.to ?? (path.startsWith('/dev/settings') ? '/dev/settings' : '')
+  return (
+    <nav className="admin-nav dev-nav" data-dev-nav="">
+      <div className="dev-nav-combo-row">
+        <select className="input sm dev-nav-combo" value={current} onChange={(e) => e.target.value && navigate(e.target.value)} aria-label="Go to" data-dev-nav-combo="">
+          <option value="">Go to…</option>
+          {NAV.map((g) =>
+            g.items ? (
+              <optgroup key={g.id} label={g.label}>
+                {g.items.map((i) => (
+                  <option key={i.to} value={i.to}>
+                    {i.label}
+                  </option>
+                ))}
+              </optgroup>
+            ) : (
+              g.subs!.map((sub) => (
+                <optgroup key={sub.id} label={`${g.label} · ${sub.label}`}>
+                  {sub.items.map((i) => (
+                    <option key={i.to} value={i.to}>
+                      {i.label}
+                    </option>
+                  ))}
+                </optgroup>
+              ))
+            ),
+          )}
+          <optgroup label="Session">
+            <option value="/dev/settings">Developer settings</option>
+          </optgroup>
+        </select>
+        <button className={`btn ghost icon sm ${designMode ? 'active' : ''}`} onClick={onDesignMode} title={`Design mode ${designMode ? 'on' : 'off'}`} aria-label="Design mode">
+          <Wand2 size={15} />
+        </button>
+        <button className="btn ghost icon sm" onClick={onLock} disabled={locking} title="Lock panel" aria-label="Lock panel">
+          <Lock size={15} />
+        </button>
+      </div>
+      <div className="dev-nav-groups">
+        {NAV.map((g) => {
+          const o = isOpen(g.id, g.id === activeGroup?.id || (!activeGroup && g.id === 'dev'))
+          const Icon = g.icon
+          return (
+            <div key={g.id} className={`dev-nav-group ${o ? 'open' : ''}`} data-nav-group={g.id} data-open={o ? '1' : '0'}>
+              <button className="dev-nav-head" onClick={() => toggle(g.id, g.id === activeGroup?.id)} aria-expanded={o}>
+                <Icon size={15} /> <span className="grow">{g.label}</span>
+                {!o && activeGroup?.id === g.id && <span className="dev-nav-dot" />}
+                <ChevronDown size={14} className={`dev-nav-chev ${o ? 'open' : ''}`} />
+              </button>
+              {o && g.items && g.items.map((i) => <Item key={i.to} item={i} />)}
+              {o &&
+                g.subs &&
+                g.subs.map((sub) => {
+                  const so = isOpen(`${g.id}.${sub.id}`, sub.id === activeSub?.id || (!activeSub && sub === g.subs![0]))
+                  return (
+                    <div key={sub.id} className={`dev-nav-sub ${so ? 'open' : ''}`} data-nav-sub={sub.id} data-open={so ? '1' : '0'}>
+                      <button className="dev-nav-subhead" onClick={() => toggle(`${g.id}.${sub.id}`, sub.id === activeSub?.id)} aria-expanded={so}>
+                        <ChevronRight size={12} className={`dev-nav-chev ${so ? 'open' : ''}`} /> {sub.label}
+                        {!so && activeSub?.id === sub.id && <span className="dev-nav-dot" />}
+                      </button>
+                      {so && sub.items.map((i) => <Item key={i.to} item={i} />)}
+                    </div>
+                  )
+                })}
+            </div>
+          )
+        })}
+        <div className="dev-nav-group open" data-nav-group="session">
+          <div className="dev-nav-head static">
+            <Settings2 size={15} /> <span className="grow">Session</span>
+          </div>
+          <NavLink to="/dev/settings">
+            <Settings2 size={16} /> Developer settings
+          </NavLink>
+          <button className={`dev-nav-btn ${designMode ? 'active' : ''}`} onClick={onDesignMode} title="Show edit handles on every page">
+            <Wand2 size={16} /> Design mode {designMode ? 'on' : 'off'}
+          </button>
+          <button className="dev-nav-btn" onClick={onLock} disabled={locking}>
+            <Lock size={16} /> Lock panel
+          </button>
+          {chips}
+        </div>
+      </div>
+    </nav>
+  )
+}
+function Item({ item }: { item: NavItem }) {
+  const Icon = item.icon
+  return (
+    <NavLink to={item.to} end={item.end}>
+      <Icon size={16} /> {item.label}
+    </NavLink>
+  )
+}
 
 /** Owner-only developer panel: every page behind it needs the developer password once per login session. */
 export function DevLayout() {
@@ -105,57 +278,25 @@ export function DevLayout() {
   const remaining = status.session ? Math.max(0, Math.round((status.session.lastActiveAt + status.sessionMinutes * 60_000 - Date.now()) / 60_000)) : 0
 
   const wide = location.pathname.startsWith('/dev/tasks/workspace') || location.pathname.startsWith('/dev/commander')
+  const chips = (
+    <>
+      <div className="dev-session-chip">
+        <Unlock size={12} /> Session #{status.session?.id} · {status.session?.changes ?? 0} change{status.session?.changes === 1 ? '' : 's'} · locks in {remaining} min
+      </div>
+      {isSafeMode() && (
+        <div className="dev-session-chip warn">
+          <LifeBuoy size={12} /> Safe mode: custom design off · <a href="?safe=0">turn on</a>
+        </div>
+      )}
+    </>
+  )
   return (
     <main className={`page dev-page ${wide ? 'dev-wide-page' : ''}`}>
       <OfflineBar />
       <div className={`admin-layout ${wide ? 'dev-wide' : ''}`}>
-        <nav className="admin-nav dev-nav">
-          <div className="eyebrow" style={{ padding: '0 12px 8px' }}>
-            Developer
-          </div>
-          {LINKS.map(({ to, label, icon: Icon, end }) => (
-            <NavLink key={to} to={to} end={end}>
-              <Icon size={16} /> {label}
-            </NavLink>
-          ))}
-          <div className="eyebrow" style={{ padding: '16px 12px 8px' }}>
-            Site builder
-          </div>
-          {DESIGN.map(({ to, label, icon: Icon }) => (
-            <NavLink key={to} to={to}>
-              <Icon size={16} /> {label}
-            </NavLink>
-          ))}
-          <div className="eyebrow" style={{ padding: '16px 12px 8px' }}>
-            Operations
-          </div>
-          {OPS.map(({ to, label, icon: Icon }) => (
-            <NavLink key={to} to={to}>
-              <Icon size={16} /> {label}
-            </NavLink>
-          ))}
-          <div className="eyebrow" style={{ padding: '16px 12px 8px' }}>
-            Session
-          </div>
-          <NavLink to="/dev/settings">
-            <Settings2 size={16} /> Developer settings
-          </NavLink>
-          <button className={`dev-nav-btn ${designMode ? 'active' : ''}`} onClick={() => setDesignMode(!designMode)} title="Show edit handles on every page">
-            <Wand2 size={16} /> Design mode {designMode ? 'on' : 'off'}
-          </button>
-          <button className="dev-nav-btn" onClick={() => lock.mutate()} disabled={lock.isPending}>
-            <Lock size={16} /> Lock panel
-          </button>
-          <div className="dev-session-chip">
-            <Unlock size={12} /> Session #{status.session?.id} · {status.session?.changes ?? 0} change{status.session?.changes === 1 ? '' : 's'} · locks in {remaining} min
-          </div>
-          {isSafeMode() && (
-            <div className="dev-session-chip warn">
-              <LifeBuoy size={12} /> Safe mode: custom design off · <a href="?safe=0">turn on</a>
-            </div>
-          )}
-        </nav>
+        <DevNav designMode={designMode} onDesignMode={() => setDesignMode(!designMode)} onLock={() => lock.mutate()} locking={lock.isPending} chips={chips} />
         <div className="grow" style={{ minWidth: 0 }}>
+          <AutoSetupSwitch hidden={wide || location.pathname.startsWith('/dev/setup')} />
           <Outlet />
         </div>
       </div>
