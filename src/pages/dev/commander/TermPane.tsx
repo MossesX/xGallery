@@ -112,6 +112,10 @@ export const TermPane = forwardRef<TermHandle, Props>(function TermPane({ profil
       onStatus: (s: string) => set('connecting', s),
       onReady: () => {
         set('open', `${profile.user}@${profile.host}`)
+        setTimeout(() => {
+          doFit()
+          t.refresh(0, t.rows - 1)
+        }, 80)
         if (pending.current) {
           const c = pending.current
           pending.current = null

@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, ArrowLeftRight, Copy, ExternalLink, Globe, GripVertical, Link2, Link2Off, Lock, Pencil, Star, Trash2 } from 'lucide-react'
-import { api, ApiError } from '../../api/client'
+import { ArrowLeft, ArrowLeftRight, Camera, Copy, ExternalLink, Globe, GripVertical, KeyRound, Link2, Link2Off, Lock, Pencil, Star, Trash2 } from 'lucide-react'
+import { api, ApiError, uploadRaw } from '../../api/client'
+import { renderAlbumSnapshot } from '../../lib/snapshot'
 import { useAlbum, useBuddies, useGalleries, useMe, useSettings, useUsers, useAlbumLinks, useCreateLink } from '../../api/hooks'
 import { CheckList } from '../../components/CheckList'
 import type { Album, LayoutConfig, MediaItem } from '../../api/types'
@@ -39,6 +40,11 @@ export function AlbumEditorPage() {
   const [restricted, setRestricted] = useState(false)
   const [allowed, setAllowed] = useState<number[]>([])
   const [accessDirty, setAccessDirty] = useState(false)
+  const [pinDialog, setPinDialog] = useState<'set' | 'change' | null>(null)
+  const [pin, setPin] = useState('')
+  const [pin2, setPin2] = useState('')
+  const [snapBusy, setSnapBusy] = useState(false)
+  const lastSig = useRef('')
 
   useEffect(() => {
     if (data && !draft) {
@@ -102,6 +108,34 @@ export function AlbumEditorPage() {
   })
   const reorder = useMutation({ mutationFn: (ids: number[]) => api.put('/api/media/reorder', { ids }), onSuccess: refresh })
 
+  /** Picture of the album page used as the blurred backdrop of the PIN prompt; refreshed whenever a shared album changes. */
+  const takeSnapshot = useCallback(async () => {
+    if (!data) return
+    setSnapBusy(true)
+    try {
+      const cols = (data.album.layoutOverride ?? site?.settings.defaultLayout)?.columns
+      const blob = await renderAlbumSnapshot({ title: data.album.title, description: data.album.description }, media, { columns: cols })
+      await uploadRaw(`/api/albums/${id}/snapshot`, blob, 'image/jpeg', {})
+      refresh()
+    } catch (e) {
+      notify((e as Error).message, 'error')
+    } finally {
+      setSnapBusy(false)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, media, id, site])
+  useEffect(() => {
+    if (!data?.album.isShared) return
+    const sig = [data.album.title, data.album.description, media.map((m) => m.id).join(',')].join('|')
+    if (!lastSig.current) {
+      lastSig.current = sig
+      if (data.album.snapshotUrl && !data.album.snapshotStale) return
+    } else if (lastSig.current === sig) return
+    else lastSig.current = sig
+    const t = setTimeout(() => void takeSnapshot(), 1500)
+    return () => clearTimeout(t)
+  }, [data?.album.isShared, data?.album.title, data?.album.description, data?.album.snapshotUrl, data?.album.snapshotStale, media, takeSnapshot])
+
   if (isLoading || !site) return <PageLoader />
   if (error instanceof ApiError && error.status === 404) return <Navigate to="/me/albums" replace />
   if (!data || !draft) return <PageLoader />
@@ -133,6 +167,51 @@ export function AlbumEditorPage() {
 
   return (
     <div className="stack" style={{ gap: 'calc(var(--space) * 3)' }}>
+      <Modal open={pinDialog != null} onClose={() => setPinDialog(null)} title={pinDialog === 'change' ? 'Change the PIN' : 'Share behind a PIN'}>
+        <form
+          className="stack"
+          style={{ gap: 10 }}
+          data-pin-dialog=""
+          onSubmit={(e: FormEvent) => {
+            e.preventDefault()
+            if (pin !== pin2) return notify('The two PINs do not match', 'error')
+            patch.mutate(
+              { visibility: 'shared', pin },
+              {
+                onSuccess: () => {
+                  setPinDialog(null)
+                  setPin('')
+                  setPin2('')
+                  notify(pinDialog === 'change' ? 'PIN changed' : 'Album is now shared behind a PIN', 'success')
+                  if (pinDialog !== 'change' && !(links ?? []).some((l) => !l.revokedAt)) createLink.mutate({ albumId: album.id, label: 'PIN link' }, { onSuccess: (l) => notify(`Private link created: ${l.fullUrl}`, 'success') })
+                },
+              },
+            )
+          }}
+        >
+          <p className="muted small" style={{ margin: 0 }}>
+            {pinDialog === 'change' ? 'Pick a new PIN; existing viewers will have to enter it again.' : 'The album becomes private and reachable only through a private link plus this PIN (4 to 8 digits). A snapshot of the page is taken for the lock screen.'}
+          </p>
+          <div className="row" style={{ gap: 8 }}>
+            <div className="field grow">
+              <label htmlFor="pin-1">PIN</label>
+              <input id="pin-1" className="input pin-input" inputMode="numeric" pattern="[0-9]{4,8}" maxLength={8} value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))} autoFocus required autoComplete="off" />
+            </div>
+            <div className="field grow">
+              <label htmlFor="pin-2">Again</label>
+              <input id="pin-2" className="input pin-input" inputMode="numeric" pattern="[0-9]{4,8}" maxLength={8} value={pin2} onChange={(e) => setPin2(e.target.value.replace(/\D/g, ''))} required autoComplete="off" />
+            </div>
+          </div>
+          <div className="row" style={{ justifyContent: 'flex-end', gap: 8 }}>
+            <button type="button" className="btn" onClick={() => setPinDialog(null)}>
+              Cancel
+            </button>
+            <button className="btn primary" disabled={pin.length < 4 || patch.isPending} data-pin-save="">
+              <Lock size={14} /> {pinDialog === 'change' ? 'Change PIN' : 'Share with PIN'}
+            </button>
+          </div>
+        </form>
+      </Modal>
       <div className="row between">
         <div>
           <Link to="/me/albums" className="btn ghost sm" style={{ marginLeft: -10 }}>
@@ -147,10 +226,11 @@ export function AlbumEditorPage() {
           <button className={`btn ${album.featured ? 'accent' : ''}`} onClick={() => patch.mutate({ featured: !album.featured })}>
             <Star size={14} fill={album.featured ? 'currentColor' : 'none'} /> {album.featured ? 'Featured' : 'Feature'}
           </button>
-          <select className="select" value={album.visibility} onChange={(e) => patch.mutate({ visibility: e.target.value })} style={{ width: 'auto' }} aria-label="Visibility">
+          <select className="select" value={album.visibility} onChange={(e) => (e.target.value === 'shared' ? setPinDialog('set') : patch.mutate({ visibility: e.target.value }))} style={{ width: 'auto' }} aria-label="Visibility">
             <option value="draft">Draft (hidden)</option>
             <option value="published">Buddies &amp; members</option>
             <option value="public">Public (no login)</option>
+            <option value="shared">Shared private (link + PIN)</option>
           </select>
         </div>
       </div>
@@ -226,6 +306,27 @@ export function AlbumEditorPage() {
                 <Link2 size={14} /> New link
               </button>
             </div>
+            {album.isShared && (
+              <div className="card stack" style={{ gap: 8 }} data-shared-pin="">
+                <div className="row between">
+                  <span className="badge accent">
+                    <Lock size={11} /> PIN protected
+                  </span>
+                  <div className="row" style={{ gap: 4 }}>
+                    <button className="btn sm" onClick={() => setPinDialog('change')} data-change-pin="">
+                      <KeyRound size={13} /> Change PIN
+                    </button>
+                    <button className="btn sm" onClick={() => void takeSnapshot()} disabled={snapBusy} data-refresh-snapshot="">
+                      <Camera size={13} /> {snapBusy ? 'Rendering…' : 'Refresh snapshot'}
+                    </button>
+                  </div>
+                </div>
+                <p className="muted small" style={{ margin: 0 }}>
+                  Anyone opening a private link sees a blurred picture of this page and a PIN prompt; the album opens after the right PIN. The picture is taken again whenever the album changes.
+                </p>
+                {album.snapshotUrl ? <img className="snapshot-preview" src={album.snapshotUrl} alt="Lock screen preview" data-snapshot-preview="" /> : <span className="muted small">Snapshot not taken yet.</span>}
+              </div>
+            )}
             {(links ?? []).filter((l) => !l.revokedAt).map((l) => (
               <div className="row" key={l.id} style={{ gap: 6 }}>
                 <input className="input grow" readOnly value={`${location.origin}${l.url}`} onFocus={(e) => e.target.select()} title={l.label} />

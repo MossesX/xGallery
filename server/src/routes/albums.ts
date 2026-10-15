@@ -1,7 +1,10 @@
 import { Router } from 'express'
+import express from 'express'
 import { randomBytes } from 'node:crypto'
 import { db, now } from '../db.js'
-import { requirePerm, requireUser } from '../auth.js'
+import { hashPassword, requirePerm, requireUser, verifyPassword } from '../auth.js'
+import { hasPinAccess, issuePin, PIN_RE, pinAttemptAllowed, pinAttemptFailed, pinAttemptReset } from '../pin.js'
+import { mkdirSync, unlinkSync, writeFileSync } from 'node:fs'
 import { canManageGallery, canViewAlbum, galleryOf, isOwner, managedGalleryIds, visibleAlbumRows } from '../access.js'
 import { HttpError, bool, num, slugify, str, wrap, IdRow } from '../util.js'
 import { albumJson, commentJson, mediaJson } from '../serialize.js'
@@ -154,7 +157,15 @@ albumsRouter.put(
     const title = str(b.title, 120) || (row.title as string)
     const slug = b.slug != null ? uniqueSlug(str(b.slug, 80) || title, id) : (row.slug as string)
     const description = b.description != null ? str(b.description, 2000) : (row.description as string)
-    const visibility = b.visibility === 'published' || b.visibility === 'draft' || b.visibility === 'public' ? b.visibility : row.visibility
+    const visibility = b.visibility === 'published' || b.visibility === 'draft' || b.visibility === 'public' || b.visibility === 'shared' ? b.visibility : row.visibility
+    const pin = typeof b.pin === 'string' ? b.pin.trim() : ''
+    if (visibility === 'shared' && !isOwner(req.user) && !req.user!.perms.canShareLinks) throw new HttpError(403, 'Your account is not allowed to share albums behind a PIN. Ask the owner.')
+    if (visibility === 'shared' && !pin && !row.pin_hash) throw new HttpError(400, 'Set a PIN of 4 to 8 digits for the shared album')
+    if (pin && !PIN_RE.test(pin)) throw new HttpError(400, 'The PIN must be 4 to 8 digits')
+    if (pin) {
+      const salt = randomBytes(16).toString('hex')
+      db.prepare('UPDATE albums SET pin_hash = ?, pin_salt = ?, pin_set_at = ? WHERE id = ?').run(hashPassword(pin, salt), salt, now(), id)
+    }
     if (b.galleryId != null && num(b.galleryId) !== row.gallery_id) {
       const target = num(b.galleryId)
       if (!canManageGallery(req.user, target)) throw new HttpError(403, 'You can only move albums between your own galleries')
@@ -378,6 +389,45 @@ albumsRouter.get(
   }),
 )
 
+/* ---------- lock-screen snapshot of a shared private album ---------- */
+
+const SNAP_DIR = 'snapshots'
+albumsRouter.post(
+  '/:id/snapshot',
+  requireUser,
+  express.raw({ type: ['image/jpeg', 'image/png', 'image/webp'], limit: '6mb' }),
+  wrap((req, res) => {
+    const row = loadManaged(req, Number(req.params.id))
+    const body = req.body as Buffer
+    if (!Buffer.isBuffer(body) || body.length < 100) throw new HttpError(400, 'Send the snapshot image as the request body')
+    const ext = req.headers['content-type'] === 'image/png' ? '.png' : req.headers['content-type'] === 'image/webp' ? '.webp' : '.jpg'
+    const rel = path.posix.join(SNAP_DIR, `${row.id}-${now()}${ext}`)
+    mkdirSync(path.join(MEDIA_DIR, SNAP_DIR), { recursive: true })
+    writeFileSync(path.join(MEDIA_DIR, rel), body)
+    const old = row.lock_snapshot as string | null
+    db.prepare('UPDATE albums SET lock_snapshot = ? WHERE id = ?').run(rel, row.id)
+    if (old && existsSync(path.join(MEDIA_DIR, old))) {
+      try {
+        unlinkSync(path.join(MEDIA_DIR, old))
+      } catch {
+        /* ignore */
+      }
+    }
+    res.json({ album: albumJson(db.prepare('SELECT * FROM albums WHERE id = ?').get(row.id) as IdRow, req.user!.id) })
+  }),
+)
+albumsRouter.get(
+  '/:id/snapshot',
+  requireUser,
+  wrap((req, res) => {
+    const row = loadManaged(req, Number(req.params.id))
+    const rel = row.lock_snapshot as string | null
+    if (!rel || !existsSync(path.join(MEDIA_DIR, rel))) throw new HttpError(404, 'No snapshot yet')
+    res.setHeader('Cache-Control', 'private, max-age=60')
+    res.sendFile(path.join(MEDIA_DIR, rel))
+  }),
+)
+
 /** Public, login-free access through a share token. */
 export const shareRouter = Router()
 shareRouter.get(
@@ -385,6 +435,11 @@ shareRouter.get(
   wrap((req, res) => {
     const row = albumForToken(req.params.token as string)
     if (!row) throw new HttpError(404, 'This private link is not valid or was revoked')
+    if (row.visibility === 'shared' && !hasPinAccess(req, row.id as number) && !(req.user && canManageGallery(req.user, row.gallery_id as number))) {
+      // Locked: only the title, the blurred snapshot and the PIN prompt; media stays hidden.
+      res.json({ locked: true, album: { id: row.id, title: row.title, description: row.description, slug: row.slug }, snapshotUrl: row.lock_snapshot ? `/api/share/${req.params.token}/snapshot` : null })
+      return
+    }
     db.prepare('UPDATE album_links SET views = views + 1 WHERE token = ?').run(req.params.token as string)
     logActivity({ userId: req.user?.id ?? null, kind: 'album.link_view', targetType: 'album', targetId: row.id as number, targetLabel: String(row.title ?? ''), ip: req.ip ?? '', detail: { token: (req.params.token as string).slice(0, 6) + '…' } })
     const media = db.prepare('SELECT * FROM media WHERE album_id = ? ORDER BY sort_order, id').all(row.id) as IdRow[]
@@ -396,5 +451,43 @@ shareRouter.get(
         return { ...j, url: `${j.url}?s=${token}`, thumbUrl: j.thumbUrl ? `${j.thumbUrl}?s=${token}` : null }
       }),
     })
+  }),
+)
+
+/** The blurred backdrop of a locked album (no PIN needed: it is a deliberately low-detail preview). */
+shareRouter.get(
+  '/:token/snapshot',
+  wrap((req, res) => {
+    const row = albumForToken(req.params.token as string)
+    const rel = row?.lock_snapshot as string | null | undefined
+    if (!row || !rel || !existsSync(path.join(MEDIA_DIR, rel))) throw new HttpError(404, 'No preview')
+    res.setHeader('Cache-Control', 'private, max-age=300')
+    res.sendFile(path.join(MEDIA_DIR, rel))
+  }),
+)
+
+/** Enter the PIN of a shared private album; success sets an album-scoped cookie for 12 hours. */
+shareRouter.post(
+  '/:token/unlock',
+  wrap((req, res) => {
+    const token = req.params.token as string
+    const row = albumForToken(token)
+    if (!row) throw new HttpError(404, 'This private link is not valid or was revoked')
+    if (row.visibility !== 'shared') {
+      res.json({ ok: true })
+      return
+    }
+    const key = `${token}|${req.ip ?? ''}`
+    if (!pinAttemptAllowed(key)) throw new HttpError(429, 'Too many wrong PINs. Try again in 15 minutes.')
+    const pin = str(req.body?.pin, 12)
+    if (!row.pin_hash || !row.pin_salt || !PIN_RE.test(pin) || !verifyPassword(pin, row.pin_salt as string, row.pin_hash as string)) {
+      pinAttemptFailed(key)
+      logActivity({ userId: req.user?.id ?? null, kind: 'album.pin_failed', targetType: 'album', targetId: row.id as number, targetLabel: String(row.title ?? ''), ip: req.ip ?? '' })
+      throw new HttpError(401, 'Wrong PIN')
+    }
+    pinAttemptReset(key)
+    issuePin(res, row.id as number)
+    logActivity({ userId: req.user?.id ?? null, kind: 'album.pin_unlock', targetType: 'album', targetId: row.id as number, targetLabel: String(row.title ?? ''), ip: req.ip ?? '' })
+    res.json({ ok: true })
   }),
 )

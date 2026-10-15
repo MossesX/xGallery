@@ -157,7 +157,7 @@ export function usePublicAlbum(slug: string | undefined, album: string | undefin
 }
 
 export function useShare(token: string | undefined) {
-  return useQuery({ queryKey: keys.share(token ?? ''), queryFn: () => api.get<{ album: Album; media: MediaItem[] }>(`/api/share/${token}`), enabled: !!token })
+  return useQuery({ queryKey: keys.share(token ?? ''), queryFn: () => api.get<{ album: Album; media: MediaItem[]; locked?: boolean; snapshotUrl?: string | null }>(`/api/share/${token}`), enabled: !!token })
 }
 
 /** Invalidate everything that depends on gallery content. */

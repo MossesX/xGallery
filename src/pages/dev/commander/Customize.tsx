@@ -23,9 +23,11 @@ interface Props {
   onSaveCustom: (cs: CustomSnippet) => void
   onDeleteCustom: (id: string) => void
   customs: CustomSnippet[]
+  runLabel?: string
+  pasteLabel?: string
 }
 
-export function Customize({ cmd, vals, setVals, profile, favorite, onFavorite, onRun, onPaste, onSaveCustom, onDeleteCustom, customs }: Props) {
+export function Customize({ cmd, vals, setVals, profile, favorite, onFavorite, onRun, onPaste, onSaveCustom, onDeleteCustom, customs, runLabel, pasteLabel }: Props) {
   const notify = useUI((s) => s.notify)
   const [edited, setEdited] = useState<string | null>(null)
   const [picker, setPicker] = useState<{ key: string; dirOnly: boolean } | null>(null)
@@ -151,12 +153,12 @@ export function Customize({ cmd, vals, setVals, profile, favorite, onFavorite, o
       )}
       <div className="row" style={{ gap: 4 }}>
         <button className="btn primary sm" onClick={() => onRun(line)} data-cmdr-run="">
-          <Play size={12} /> {cmd.ftp ? 'Do it' : 'Run in terminal'}
+          <Play size={12} /> {cmd.ftp ? 'Do it' : runLabel ?? 'Run in terminal'}
         </button>
         {!cmd.ftp && (
           <>
             <button className="btn sm" onClick={() => onPaste(line)} title="Type it at the prompt without pressing Enter" data-cmdr-paste="">
-              <ClipboardPaste size={12} /> Paste only
+              <ClipboardPaste size={12} /> {pasteLabel ?? 'Paste only'}
             </button>
             <button className="btn sm" onClick={copy}>
               <Copy size={12} /> Copy

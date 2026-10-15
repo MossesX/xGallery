@@ -252,7 +252,7 @@ export interface MediaItem {
   myReaction: string | null
 }
 
-export type Visibility = 'published' | 'draft' | 'public'
+export type Visibility = 'published' | 'draft' | 'public' | 'shared'
 
 export interface GallerySummary {
   id: number
@@ -300,6 +300,10 @@ export interface Album {
   restricted: boolean
   allowedUserIds?: number[]
   isPublic: boolean
+  isShared: boolean
+  hasPin: boolean
+  snapshotUrl: string | null
+  snapshotStale: boolean
   isHook: boolean
   slug: string
   title: string

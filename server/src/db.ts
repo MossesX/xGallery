@@ -314,6 +314,11 @@ CREATE INDEX IF NOT EXISTS messages_pair ON messages(from_id, to_id, created_at)
 `)
 if (!hasColumn('albums', 'gallery_id')) db.exec('ALTER TABLE albums ADD COLUMN gallery_id INTEGER')
 if (!hasColumn('albums', 'restricted')) db.exec('ALTER TABLE albums ADD COLUMN restricted INTEGER NOT NULL DEFAULT 0')
+// Shared private albums: a PIN (hashed) guards the private link; a snapshot of the page sits blurred behind the prompt.
+if (!hasColumn('albums', 'pin_hash')) db.exec('ALTER TABLE albums ADD COLUMN pin_hash TEXT')
+if (!hasColumn('albums', 'pin_salt')) db.exec('ALTER TABLE albums ADD COLUMN pin_salt TEXT')
+if (!hasColumn('albums', 'pin_set_at')) db.exec('ALTER TABLE albums ADD COLUMN pin_set_at INTEGER')
+if (!hasColumn('albums', 'lock_snapshot')) db.exec('ALTER TABLE albums ADD COLUMN lock_snapshot TEXT')
 db.exec('CREATE INDEX IF NOT EXISTS albums_gallery ON albums(gallery_id)')
 
 // v7: the developer panel — password-gated sessions with a change log, site-design snapshots,

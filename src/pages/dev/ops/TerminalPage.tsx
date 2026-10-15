@@ -10,6 +10,7 @@ import { useOps, type ShellProfile } from '../../../api/ops'
 import { useUI } from '../../../store/ui'
 import { nativeAvailable, NativeTransport, WsTransport, type Transport } from '../../../terminal/transport'
 import { CommandBlock } from './CommandBlock'
+import { SnippetDeck } from '../commander/SnippetDeck'
 
 interface SshInfo {
   hasKey: boolean
@@ -178,7 +179,17 @@ export function TerminalPage() {
     const events = {
       onData: (d: Uint8Array | string) => term.write(d),
       onStatus: (s: string) => patch(id, { note: s }),
-      onReady: (info: { host: string; user: string; port: number; hostKey?: string }) => patch(id, { status: 'open', note: info.hostKey ? `host key ${info.hostKey}` : '' }),
+      onReady: (info: { host: string; user: string; port: number; hostKey?: string }) => {
+        patch(id, { status: 'open', note: info.hostKey ? `host key ${info.hostKey}` : '' })
+        setTimeout(() => {
+          try {
+            fit.fit()
+            term.refresh(0, term.rows - 1)
+          } catch {
+            /* ignore */
+          }
+        }, 80)
+      },
       onError: (m: string) => {
         patch(id, { status: 'error', note: m })
         term.write(`\r\n\x1b[31m${m}\x1b[0m\r\n`)
@@ -194,11 +205,31 @@ export function TerminalPage() {
     terms.current.set(id, { term, fit, transport, el })
     setTabs((t) => [...t, { id, title: `${profile.user}@${profile.host}`, status: 'connecting', note: 'Connecting…' }])
     setActive(id)
-    requestAnimationFrame(() => {
-      if (!el.parentElement && hostRef.current) hostRef.current.appendChild(el)
+    // Open into the host right away (it is mounted) so xterm measures real dimensions before the first bytes arrive.
+    const host = hostRef.current
+    if (host) {
+      for (const [, t] of terms.current) t.el.style.display = 'none'
+      el.style.display = 'block'
+      host.appendChild(el)
       term.open(el)
-      fit.fit()
-      transport.connect({ profileId: profile.id, host: profile.host, port: profile.port, user: profile.user, auth: auth === 'password' ? { method: 'password', password } : { method: 'key' }, cols: term.cols, rows: term.rows, command })
+      try {
+        fit.fit()
+      } catch {
+        /* measured again on the next frame */
+      }
+    }
+    transport.connect({ profileId: profile.id, host: profile.host, port: profile.port, user: profile.user, auth: auth === 'password' ? { method: 'password', password } : { method: 'key' }, cols: term.cols, rows: term.rows, command })
+    requestAnimationFrame(() => {
+      if (!el.parentElement && hostRef.current) {
+        hostRef.current.appendChild(el)
+        term.open(el)
+      }
+      try {
+        fit.fit()
+        term.refresh(0, term.rows - 1)
+      } catch {
+        /* ignore */
+      }
       term.focus()
     })
   }
@@ -219,12 +250,15 @@ export function TerminalPage() {
   const sendRaw = (data: string) => {
     if (!active) return
     const t = terms.current.get(active)
+    hostRef.current?.scrollIntoView({ block: 'start' })
     t?.transport.send(data)
     t?.term.focus()
   }
   const run = (cmd: string) => {
     const t = active ? terms.current.get(active) : null
     const tab = tabs.find((x) => x.id === active)
+    // xterm pauses painting while off-screen, so bring the terminal back into view when a snippet below it runs.
+    hostRef.current?.scrollIntoView({ block: 'start' })
     if (t && tab?.status === 'open') sendRaw(`${cmd}\n`)
     else connect(cmd)
   }
@@ -353,6 +387,7 @@ export function TerminalPage() {
 
       <div className="term-host" ref={hostRef} data-term-host="" />
 
+      <SnippetDeck profile={profileId} mode="terminal" onRun={(line) => run(line)} onPaste={(line) => sendRaw(line)} defaultOpen={false} />
       <div className="term-quick">
         {QUICK.map((q) => (
           <button key={q.label} className={`btn sm ${q.icon === 'claude' ? 'primary' : ''}`} onClick={() => run(q.cmd(quickCtx))} title={q.cmd(quickCtx)}>

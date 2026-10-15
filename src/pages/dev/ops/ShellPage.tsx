@@ -4,6 +4,7 @@ import { useOps, useSaveOps, type OpsProfile, type ShellProfile } from '../../..
 import { useUI } from '../../../store/ui'
 import { CommandBlock } from './CommandBlock'
 import { moshCommand, recipeById } from './recipes'
+import { SnippetDeck } from '../commander/SnippetDeck'
 
 const PREDICT: [ShellProfile['predict'], string][] = [
   ['adaptive', 'adaptive — predict only on slow links (default)'],
@@ -64,6 +65,7 @@ export function ShellPage() {
         </button>
       </div>
 
+      <SnippetDeck profile={p.id} mode="mosh" wrap={(line) => `LANG=${p.locale} LC_ALL=${p.locale} ${moshCommand(p)} -- bash -lc ${`'${line.replace(/'/g, `'\\''`)}; exec bash -l'`}`} defaultOpen={false} />
       <div className="shell-layout">
         <aside className="card stack" style={{ gap: 6, padding: 8 }}>
           {profiles.map((x) => (

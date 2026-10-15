@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Eraser, FolderTree, Maximize2, Minimize2, Plug, Plus, ScrollText, TerminalSquare, Unplug, X, ZoomIn, ZoomOut } from 'lucide-react'
-import { api } from '../../../api/client'
 import { useOps } from '../../../api/ops'
 import { useUI } from '../../../store/ui'
-import { CATALOG, defaultsOf, fromCustom, type Command, type CustomSnippet, type Vals } from './catalog'
+import { defaultsOf, fromCustom, type Command, type CustomSnippet, type Vals } from './catalog'
+import { useCommanderData } from './useCommanderData'
 import { Customize } from './Customize'
 import { FtpPane, type FtpHandle } from './FtpPane'
 import { Library } from './Library'
@@ -17,12 +16,6 @@ import { TermPane, type TermHandle, type TermStatus } from './TermPane'
  * snippets act on.
  */
 
-interface CommanderData {
-  favorites: string[]
-  customs: CustomSnippet[]
-  history: { cmd: string; at: number; where: string }[]
-  prefs: Record<string, unknown>
-}
 interface SshTab { id: string; title: string; status: TermStatus; note: string }
 interface FtpTab { id: string; path: string }
 interface LogLine { at: number; where: string; text: string; ok: boolean }
@@ -39,28 +32,7 @@ export function CommanderPage() {
   }, [profiles, profileId, opsData])
   const profile = profiles.find((p) => p.id === profileId)
 
-  // persisted data (favourites, custom snippets, history)
-  const saved = useQuery({ queryKey: ['dev-commander'], queryFn: () => api.get<{ data: CommanderData }>('/api/dev/commander').then((r) => r.data) })
-  const [data, setData] = useState<CommanderData>({ favorites: [], customs: [], history: [], prefs: {} })
-  const loaded = useRef(false)
-  useEffect(() => {
-    if (saved.data && !loaded.current) {
-      setData(saved.data)
-      loaded.current = true
-    }
-  }, [saved.data])
-  const persist = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const update = useCallback((patch: Partial<CommanderData>) => {
-    setData((d) => {
-      const next = { ...d, ...patch }
-      if (persist.current) clearTimeout(persist.current)
-      persist.current = setTimeout(() => api.put('/api/dev/commander', { data: next }).catch((e: Error) => notify(e.message, 'error')), 600)
-      return next
-    })
-  }, [notify])
-  const commands = useMemo(() => [...CATALOG, ...data.customs.map(fromCustom)], [data.customs])
-  const favorites = useMemo(() => new Set(data.favorites), [data.favorites])
-  const recent = useMemo(() => [...new Set(data.history.map((h) => h.where.startsWith('cmd:') ? h.where.slice(4) : '').filter(Boolean))].slice(0, 10), [data.history])
+  const { data, commands, favorites, recent, toggleFavorite, remember, saveCustom: saveCustomData, deleteCustom: deleteCustomData } = useCommanderData()
 
   // selection + options
   const [selected, setSelected] = useState<Command | null>(null)
@@ -114,7 +86,6 @@ export function CommanderPage() {
   }
 
   // running things
-  const remember = (cmd: Command | null, line: string, where: string) => update({ history: [{ cmd: line, at: Date.now(), where: cmd ? `cmd:${cmd.id}` : where }, ...data.history].slice(0, 200) })
   const runLine = (line: string, cmd: Command | null = selected) => {
     if (cmd?.ftp) {
       let id = activeFtp
@@ -142,14 +113,13 @@ export function CommanderPage() {
     setMode('ssh')
     requestAnimationFrame(() => terms.current.get(id!)?.paste(line))
   }
-  const toggleFavorite = (id: string) => update({ favorites: favorites.has(id) ? data.favorites.filter((x) => x !== id) : [...data.favorites, id] })
   const saveCustom = (cs: CustomSnippet) => {
-    update({ customs: [...data.customs.filter((c) => c.id !== cs.id), cs] })
+    saveCustomData(cs)
     notify(`Snippet “${cs.name}” saved`, 'success')
     select(fromCustom(cs))
   }
   const deleteCustom = (id: string) => {
-    update({ customs: data.customs.filter((c) => c.id !== id) })
+    deleteCustomData(id)
     setSelected(null)
   }
   useEffect(() => localStorage.setItem('xg-term-font', String(fontSize)), [fontSize])

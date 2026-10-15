@@ -33,6 +33,14 @@ site. Members sign in to browse, like and comment.
   variables, webhook install, GitHub inbox, collaborators, and a raw API explorer. Failed runs,
   successful deploys, new PRs/issues and releases notify the owner in the site bell.
 
+**Shared private albums (PIN)**
+- Any album can be set to "Shared private": it stays hidden from members and is reachable only
+  through a private link plus a 4 to 8 digit PIN chosen when the status is set (members with the
+  share-links permission can do this for their own albums).
+- Opening the link shows a blurred snapshot of the album page behind a PIN prompt; the snapshot is
+  rendered on the device and uploaded when the album becomes shared and again whenever it changes.
+  Wrong PINs are rate limited; a correct PIN sets an album-scoped cookie for 12 hours.
+
 **Developer panel: Filesystem commander**
 - A no-code way to drive the server: a library of 260+ commands (files, search, text, permissions,
   archives, transfer, disk, processes, services, network, docker, git, packages, users, system,
@@ -43,6 +51,9 @@ site. Members sign in to browse, like and comment.
 - Nested tab groups: SSH terminals and FTP (SFTP) clients, each with their own tabs; FTP snippets
   run through the panel's SFTP connection, "terminal here" bridges a folder into a shell.
 - Favourites, history and your own snippets (with {placeholder} options) are stored on the server.
+- The same snippet browser is embedded in Terminal · SSH (runs in the open terminal) and in Remote
+  shell · mosh, where each command is wrapped into the profile's mosh invocation to copy, download
+  or hand to Termux.
 
 **Theming**
 - Every theme carries a matched light *and* dark palette, display/body fonts, corner radius and density.

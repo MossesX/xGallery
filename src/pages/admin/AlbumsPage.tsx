@@ -198,7 +198,7 @@ export function AlbumsPage() {
                     {a.counts.videos > 0 && <span className="muted small"> · {a.counts.videos} video</span>}
                   </td>
                   <td>{a.layoutOverride ? <span className="badge accent">{a.layoutOverride.kind} (override)</span> : <span className="badge">Default</span>}</td>
-                  <td>{a.visibility === 'public' ? <span className="badge success">Public</span> : a.visibility === 'published' ? <span className="badge primary">Buddies</span> : <span className="badge">Draft</span>}</td>
+                  <td>{a.visibility === 'public' ? <span className="badge success">Public</span> : a.visibility === 'published' ? <span className="badge primary">Buddies</span> : a.visibility === 'shared' ? <span className="badge accent">PIN link</span> : <span className="badge">Draft</span>}</td>
                   <td>
                     <div className="row" style={{ justifyContent: 'flex-end', gap: 2 }}>
                       <button className="btn ghost icon sm" title={a.featured ? 'Unfeature' : 'Feature on home'} onClick={() => patch.mutate({ id: a.id, patch: { featured: !a.featured } })}>
@@ -217,6 +217,7 @@ export function AlbumsPage() {
                       <select className="select" value={a.visibility} onChange={(e) => patch.mutate({ id: a.id, patch: { visibility: e.target.value } })} style={{ width: 'auto', padding: '3px 6px' }} aria-label="Visibility">
                         <option value="draft">Draft</option>
                         <option value="published">Buddies &amp; members</option>
+                        {a.visibility === 'shared' && <option value="shared">Shared private (PIN)</option>}
                         <option value="public">Public</option>
                       </select>
                       <button className="btn ghost icon sm danger" title="Delete" onClick={() => confirm(`Delete "${a.title}" and all its media? This cannot be undone.`) && remove.mutate(a.id)}>
