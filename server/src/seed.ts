@@ -79,7 +79,8 @@ export function applyOwnerPasswordReset(): void {
   }
   const print = createHash('sha256').update(`owner-reset:${value}`).digest('hex')
   if (getSetting<string>('ownerResetApplied', '') === print) {
-    console.log('[reset] RESET_OWNER_PASSWORD is set but this value was already applied earlier; sign in with it, or set a new value to reset again')
+    const who = db.prepare("SELECT username FROM users WHERE role = 'owner' ORDER BY id LIMIT 1").get() as { username: string } | undefined
+    console.log(`[reset] RESET_OWNER_PASSWORD (${value.length} characters) was already applied to @${who?.username ?? '?'} earlier; sign in with that exact value, or set a new value to reset again`)
     return
   }
   if (value.length < 8) {
