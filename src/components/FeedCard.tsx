@@ -10,7 +10,7 @@ export function FeedCard({ album }: { album: Album }) {
   const owner = album.gallery?.owner
   const slug = album.gallery?.slug ?? ''
   return (
-    <article className="feed-card">
+    <article className="feed-card" data-album-id={album.id} data-album-slug={album.slug} data-album-title={album.title} data-album-public={album.isPublic ? '1' : '0'} data-album-owner={album.gallery?.owner?.id ?? ''}>
       <header className="feed-head">
         <Link to={`/public/${slug}`} className="feed-person">
           <Avatar name={owner?.displayName ?? album.gallery?.title ?? '?'} size={36} src={owner?.avatarUrl} />

@@ -46,7 +46,7 @@ export function HomePage() {
   return (
     <main className="page">
       {hero && (
-        <section className="hero-feature">
+        <section className="hero-feature" data-album-id={hero.id} data-album-slug={hero.slug} data-album-title={hero.title} data-album-public={hero.isPublic ? '1' : '0'} data-album-owner={hero.gallery?.owner?.id ?? ''}>
           {hero.cover && <MediaThumb item={hero.cover} alt="" className="hero-bg" />}
           <div className="hero-shade" />
           <div className="hero-content">

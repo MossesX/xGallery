@@ -315,3 +315,16 @@ export interface InboxItem {
   handledAt: number | null
   readAt: number | null
 }
+
+/** A private, revocable link to an album; anyone holding it can view, whatever the album's visibility. */
+export interface AlbumLink {
+  id: number
+  albumId: number
+  token: string
+  label: string
+  url: string
+  createdBy: number | null
+  createdAt: number
+  views: number
+  revokedAt: number | null
+}

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Clapperboard, Eye, Heart, Images, Play, Share2, Tv } from 'lucide-react'
-import { useAlbum, useSettings } from '../api/hooks'
+import { ArrowLeft, Clapperboard, Eye, Globe, Heart, Images, Link2, Lock, Play, Share2, Tv } from 'lucide-react'
+import { useAlbum, useSettings, useCreateLink, useTogglePublic } from '../api/hooks'
 import { MediaLayout } from '../components/MediaLayout'
 import { Lightbox } from '../components/Lightbox'
 import { Comments } from '../components/Comments'
@@ -15,6 +15,8 @@ export function AlbumPage() {
   const { slug } = useParams()
   const { data: site } = useSettings()
   const { data, isLoading, error } = useAlbum(slug)
+  const togglePublic = useTogglePublic()
+  const createLink = useCreateLink()
   const notify = useUI((s) => s.notify)
   const [params, setParams] = useSearchParams()
   const openId = params.get('m')
@@ -64,6 +66,10 @@ export function AlbumPage() {
     setParams(next, { replace: true })
   }
 
+  const canManage = !!data?.canManage
+  const privateLink = () =>
+    createLink.mutate({ albumId: album.id }, { onSuccess: (l) => notify(`Private link copied: ${l.fullUrl}`, 'success'), onError: (e: Error) => notify(e.message, 'error') })
+  const flipPublic = () => togglePublic.mutate({ albumId: album.id, makePublic: !album.isPublic }, { onSuccess: () => notify(album.isPublic ? 'Album is now for buddies & members' : 'Album is now public', 'success'), onError: (e: Error) => notify(e.message, 'error') })
   const share = async () => {
     const url = album.shareToken ? `${location.origin}/s/${album.shareToken}` : location.href
     try {
@@ -80,11 +86,21 @@ export function AlbumPage() {
         <Link to={album.gallery ? `/g/${album.gallery.slug}` : '/'} className="btn ghost sm">
           <ArrowLeft size={14} /> {album.gallery?.title ?? 'All galleries'}
         </Link>
-        <div className="row">
+        <div className="row" data-album-id={album.id} data-album-slug={album.slug} data-album-title={album.title} data-album-public={album.isPublic ? '1' : '0'} data-album-manage={canManage ? '1' : '0'}>
           <button className="btn sm" onClick={share}>
             <Share2 size={14} /> Share
           </button>
           <FavoriteButton album={album} />
+          {canManage && (
+            <>
+              <button className={`btn sm ${album.isPublic ? 'accent' : ''}`} onClick={flipPublic} disabled={togglePublic.isPending} title={album.isPublic ? 'Public: anyone can see this album. Click to make it buddies & members only.' : 'Make this album public (no login needed)'} aria-pressed={album.isPublic}>
+                {album.isPublic ? <Globe size={14} /> : <Lock size={14} />} {album.isPublic ? 'Public' : 'Make public'}
+              </button>
+              <button className="btn sm" onClick={privateLink} disabled={createLink.isPending} title="Create a new unique private link; anyone with it can view this album">
+                <Link2 size={14} /> Private link
+              </button>
+            </>
+          )}
           {videos.length > 0 && (
             <button className="btn sm" onClick={() => setPlay(videos[0].id)}>
               <Tv size={14} /> Play videos

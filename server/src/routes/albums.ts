@@ -177,13 +177,73 @@ albumsRouter.post(
   '/:id/share',
   requireUser,
   wrap((req, res) => {
+    // Legacy single link: creating now mints a fresh private link; disabling clears the legacy token.
     const id = loadManaged(req, Number(req.params.id)).id
     const enable = bool(req.body?.enabled, true)
-    const token = enable ? randomBytes(12).toString('base64url') : null
-    db.prepare('UPDATE albums SET share_token = ? WHERE id = ?').run(token, id)
-    res.json({ shareToken: token })
+    if (!enable) {
+      db.prepare('UPDATE albums SET share_token = NULL WHERE id = ?').run(id)
+      res.json({ shareToken: null })
+      return
+    }
+    const link = createLink(id, req.user!.id, str(req.body?.label, 80))
+    res.json({ shareToken: link.token, link: linkJson(link) })
   }),
 )
+
+/* ---------- private links: unlimited, each unique, revocable ---------- */
+
+type LinkRow = IdRow & { album_id: number; token: string; label: string; created_by: number | null; created_at: number; views: number; revoked_at: number | null }
+
+function linkJson(l: LinkRow) {
+  return { id: l.id, albumId: l.album_id, token: l.token, label: l.label, url: `/s/${l.token}`, createdBy: l.created_by, createdAt: l.created_at, views: l.views, revokedAt: l.revoked_at ?? null }
+}
+
+/** Every call mints a brand-new token, even when the album already has links. */
+function createLink(albumId: number, userId: number, label: string): LinkRow {
+  let token = ''
+  do token = randomBytes(15).toString('base64url')
+  while (db.prepare('SELECT 1 FROM album_links WHERE token = ?').get(token) || db.prepare('SELECT 1 FROM albums WHERE share_token = ?').get(token))
+  const info = db.prepare('INSERT INTO album_links(album_id, token, label, created_by, created_at) VALUES (?, ?, ?, ?, ?)').run(albumId, token, label, userId, now())
+  return db.prepare('SELECT * FROM album_links WHERE id = ?').get(info.lastInsertRowid as number) as LinkRow
+}
+
+albumsRouter.get(
+  '/:id/links',
+  requireUser,
+  wrap((req, res) => {
+    const id = loadManaged(req, Number(req.params.id)).id
+    const rows = db.prepare('SELECT * FROM album_links WHERE album_id = ? ORDER BY created_at DESC').all(id) as LinkRow[]
+    res.json({ links: rows.map(linkJson) })
+  }),
+)
+
+albumsRouter.post(
+  '/:id/links',
+  requireUser,
+  wrap((req, res) => {
+    const id = loadManaged(req, Number(req.params.id)).id
+    const link = createLink(id, req.user!.id, str(req.body?.label, 80))
+    res.status(201).json({ link: linkJson(link) })
+  }),
+)
+
+albumsRouter.delete(
+  '/:id/links/:linkId',
+  requireUser,
+  wrap((req, res) => {
+    const id = loadManaged(req, Number(req.params.id)).id
+    const r = db.prepare('UPDATE album_links SET revoked_at = ? WHERE id = ? AND album_id = ? AND revoked_at IS NULL').run(now(), Number(req.params.linkId), id) as { changes: number }
+    if (!r.changes) throw new HttpError(404, 'Link not found')
+    res.json({ ok: true })
+  }),
+)
+
+/** Resolve a share token to its album: a live private link, or the legacy single token. */
+export function albumForToken(token: string): IdRow | undefined {
+  const link = db.prepare('SELECT * FROM album_links WHERE token = ? AND revoked_at IS NULL').get(token) as LinkRow | undefined
+  if (link) return db.prepare('SELECT * FROM albums WHERE id = ?').get(link.album_id) as IdRow | undefined
+  return db.prepare('SELECT * FROM albums WHERE share_token = ?').get(token) as IdRow | undefined
+}
 
 albumsRouter.delete(
   '/:id',
@@ -242,8 +302,9 @@ export const shareRouter = Router()
 shareRouter.get(
   '/:token',
   wrap((req, res) => {
-    const row = db.prepare('SELECT * FROM albums WHERE share_token = ?').get(req.params.token as string) as IdRow | undefined
-    if (!row) throw new HttpError(404, 'This share link is not valid')
+    const row = albumForToken(req.params.token as string)
+    if (!row) throw new HttpError(404, 'This private link is not valid or was revoked')
+    db.prepare('UPDATE album_links SET views = views + 1 WHERE token = ?').run(req.params.token as string)
     const media = db.prepare('SELECT * FROM media WHERE album_id = ? ORDER BY sort_order, id').all(row.id) as IdRow[]
     const token = req.params.token as string
     res.json({

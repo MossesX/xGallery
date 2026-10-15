@@ -3,7 +3,7 @@ import { Link, Navigate, useParams } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, ArrowLeftRight, Copy, ExternalLink, Globe, GripVertical, Link2, Link2Off, Lock, Pencil, Star, Trash2 } from 'lucide-react'
 import { api, ApiError } from '../../api/client'
-import { useAlbum, useBuddies, useMe, useSettings, useUsers } from '../../api/hooks'
+import { useAlbum, useBuddies, useMe, useSettings, useUsers, useAlbumLinks, useCreateLink } from '../../api/hooks'
 import { CheckList } from '../../components/CheckList'
 import type { Album, LayoutConfig, MediaItem } from '../../api/types'
 import { MediaThumb } from '../../components/MediaThumb'
@@ -59,11 +59,14 @@ export function AlbumEditorPage() {
     onSuccess: refresh,
     onError: (e: Error) => notify(e.message, 'error'),
   })
-  const share = useMutation({
-    mutationFn: (enabled: boolean) => api.post<{ shareToken: string | null }>(`/api/albums/${id}/share`, { enabled }),
-    onSuccess: (r) => {
-      refresh()
-      notify(r.shareToken ? 'Public share link enabled' : 'Share link turned off', 'success')
+  const { data: links } = useAlbumLinks(id ? Number(id) : null)
+  const createLink = useCreateLink()
+  const [linkLabel, setLinkLabel] = useState('')
+  const revokeLink = useMutation({
+    mutationFn: (linkId: number) => api.del(`/api/albums/${id}/links/${linkId}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['album-links', Number(id)] })
+      notify('Link revoked')
     },
   })
   const updateMedia = useMutation({
@@ -120,7 +123,6 @@ export function AlbumEditorPage() {
     reorder.mutate(next.map((m) => m.id))
   }
 
-  const shareUrl = album.shareToken ? `${location.origin}/s/${album.shareToken}` : null
   const members = (users ?? []).filter((u) => u.role === 'user' && (u.galleryIds ?? []).includes(album.galleryId))
   const memberOptions = members.map((u) => ({ id: u.id, label: u.display_name, hint: `@${u.username}${u.status === 'pending' ? ' · pending' : ''}` }))
   for (const b of buddyLists?.buddies ?? []) if (!memberOptions.some((o) => o.id === b.id)) memberOptions.push({ id: b.id, label: b.displayName, hint: `@${b.username} · buddy` })
@@ -178,25 +180,38 @@ export function AlbumEditorPage() {
         <div className="stack" style={{ gap: 'calc(var(--space) * 3)' }}>
           <section className="card stack" style={{ gap: 'calc(var(--space) * 1.5)' }}>
             <div className="row between">
-              <h3 style={{ margin: 0 }}>Sharing</h3>
-              {album.shareToken ? <span className="badge success">Public link on</span> : <span className="badge">Members only</span>}
+              <h3 style={{ margin: 0 }}>Private links</h3>
+              <span className="badge">{(links ?? []).filter((l) => !l.revokedAt).length} active</span>
             </div>
             <p className="muted small" style={{ margin: 0 }}>
-              Set visibility to Public to list this album on the gallery's public page for anyone. A share link works for any visibility, including drafts.
+              Anyone holding a private link can view this album without signing in, whatever its visibility. Every link you create is unique, so you can hand out one per person and revoke them individually.
             </p>
-            {shareUrl && (
-              <div className="row">
-                <input className="input grow" readOnly value={shareUrl} onFocus={(e) => e.target.select()} />
-                <button className="btn icon" title="Copy" onClick={() => navigator.clipboard.writeText(shareUrl).then(() => notify('Link copied', 'success'))}>
-                  <Copy size={14} />
-                </button>
-              </div>
-            )}
-            <div>
-              <button className="btn sm" onClick={() => share.mutate(!album.shareToken)}>
-                {album.shareToken ? <Link2Off size={14} /> : <Link2 size={14} />} {album.shareToken ? 'Turn off link' : 'Create public link'}
+            <div className="row">
+              <input className="input grow" value={linkLabel} onChange={(e) => setLinkLabel(e.target.value)} placeholder="Label (optional), e.g. for Grandma" />
+              <button className="btn primary sm" onClick={() => createLink.mutate({ albumId: album.id, label: linkLabel }, { onSuccess: (l) => { setLinkLabel(''); notify(`New private link copied: ${l.fullUrl}`, 'success') }, onError: (e: Error) => notify(e.message, 'error') })} disabled={createLink.isPending}>
+                <Link2 size={14} /> New link
               </button>
             </div>
+            {(links ?? []).filter((l) => !l.revokedAt).map((l) => (
+              <div className="row" key={l.id} style={{ gap: 6 }}>
+                <input className="input grow" readOnly value={`${location.origin}${l.url}`} onFocus={(e) => e.target.select()} title={l.label} />
+                <span className="muted small" style={{ whiteSpace: 'nowrap' }}>
+                  {l.label ? `${l.label} · ` : ''}
+                  {l.views} view{l.views === 1 ? '' : 's'}
+                </span>
+                <button className="btn icon sm" title="Copy" onClick={() => navigator.clipboard.writeText(`${location.origin}${l.url}`).then(() => notify('Link copied', 'success'))}>
+                  <Copy size={14} />
+                </button>
+                <button className="btn ghost icon sm danger" title="Revoke" onClick={() => confirm('Revoke this link? Anyone using it will lose access.') && revokeLink.mutate(l.id)}>
+                  <Link2Off size={14} />
+                </button>
+              </div>
+            ))}
+            {album.shareToken && (
+              <p className="muted small" style={{ margin: 0 }}>
+                Legacy link {`${location.origin}/s/${album.shareToken}`} still works.
+              </p>
+            )}
           </section>
 
           <section className="card stack" style={{ gap: 'calc(var(--space) * 1.5)' }}>

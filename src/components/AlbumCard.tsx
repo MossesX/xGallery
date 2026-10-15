@@ -6,7 +6,7 @@ import { FavoriteButton } from './FavoriteButton'
 
 export function AlbumCard({ album, large = false, to, publicMode = false }: { album: Album; large?: boolean; to?: string; publicMode?: boolean }) {
   return (
-    <Link to={to ?? `/album/${album.slug}`} className={`album-card ${large ? 'large' : ''}`}>
+    <Link to={to ?? `/album/${album.slug}`} className={`album-card ${large ? 'large' : ''}`} data-album-id={album.id} data-album-slug={album.slug} data-album-title={album.title} data-album-public={album.isPublic ? '1' : '0'} data-album-owner={album.gallery?.owner?.id ?? ''}>
       <div className="cover">
         {album.cover ? (
           <MediaThumb item={album.cover} alt="" />

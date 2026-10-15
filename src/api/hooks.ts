@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
-import type { AiConversation, AiMessage, AiSettingsView, AiStatus, Album, BuddyLists, Comment, Conversation, Gallery, InboxItem, MediaItem, Message, Person, PublicFeed, Session, SiteSettings, Stats, Theme, ThemeDraft, Unread, User } from './types'
+import type { AlbumLink, AiConversation, AiMessage, AiSettingsView, AiStatus, Album, BuddyLists, Comment, Conversation, Gallery, InboxItem, MediaItem, Message, Person, PublicFeed, Session, SiteSettings, Stats, Theme, ThemeDraft, Unread, User } from './types'
 
 export const keys = {
   me: ['me'] as const,
@@ -253,4 +253,42 @@ export function useInbox(status = '', enabled = true) {
 
 export function useInboxUnread(enabled = true) {
   return useQuery({ queryKey: ['inbox-unread'], queryFn: () => api.get<{ open: number; unread: number }>('/api/inbox/unread'), enabled, refetchInterval: 30_000 })
+}
+
+/* ---------- private links ---------- */
+
+export function useAlbumLinks(albumId: number | null | undefined, enabled = true) {
+  return useQuery({ queryKey: ['album-links', albumId], queryFn: () => api.get<{ links: AlbumLink[] }>(`/api/albums/${albumId}/links`).then((r) => r.links), enabled: enabled && albumId != null })
+}
+
+/** Mint a new, unique private link for an album and copy it to the clipboard. */
+export function useCreateLink() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (v: { albumId: number; label?: string }) => {
+      const r = await api.post<{ link: AlbumLink }>(`/api/albums/${v.albumId}/links`, { label: v.label ?? '' })
+      const url = `${location.origin}${r.link.url}`
+      try {
+        await navigator.clipboard.writeText(url)
+      } catch {
+        /* clipboard may be unavailable */
+      }
+      return { ...r.link, fullUrl: url }
+    },
+    onSuccess: (_r, v) => qc.invalidateQueries({ queryKey: ['album-links', v.albumId] }),
+  })
+}
+
+/** Flip an album between public and buddies-and-members. */
+export function useTogglePublic() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (v: { albumId: number; makePublic: boolean }) => api.put<{ album: Album }>(`/api/albums/${v.albumId}`, { visibility: v.makePublic ? 'public' : 'published' }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['album'] })
+      qc.invalidateQueries({ queryKey: ['albums'] })
+      qc.invalidateQueries({ queryKey: ['galleries'] })
+      qc.invalidateQueries({ queryKey: ['public-feed'] })
+    },
+  })
 }

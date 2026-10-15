@@ -162,6 +162,20 @@ if (!hasColumn('users', 'status')) db.exec("ALTER TABLE users ADD COLUMN status 
 if (!hasColumn('users', 'created_by')) db.exec('ALTER TABLE users ADD COLUMN created_by INTEGER')
 if (!hasColumn('users', 'avatar_path')) db.exec('ALTER TABLE users ADD COLUMN avatar_path TEXT')
 if (!hasColumn('users', 'ai_enabled')) db.exec('ALTER TABLE users ADD COLUMN ai_enabled INTEGER NOT NULL DEFAULT 0')
+// v5: private links — any number of unique, revocable links per album; anyone holding one can view.
+db.exec(`
+CREATE TABLE IF NOT EXISTS album_links (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  album_id INTEGER NOT NULL REFERENCES albums(id) ON DELETE CASCADE,
+  token TEXT NOT NULL UNIQUE,
+  label TEXT NOT NULL DEFAULT '',
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at INTEGER NOT NULL,
+  views INTEGER NOT NULL DEFAULT 0,
+  revoked_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS album_links_album ON album_links(album_id);
+`)
 if (!hasColumn('users', 'perms')) db.exec("ALTER TABLE users ADD COLUMN perms TEXT NOT NULL DEFAULT '{}'")
 // v4: owner inbox (account requests, contact messages) and the AI assistant's conversations.
 db.exec(`

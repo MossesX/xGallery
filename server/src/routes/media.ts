@@ -62,7 +62,7 @@ function canView(req: import('express').Request, row: Record<string, unknown>): 
     | undefined
   if (!album) return false
   const share = typeof req.query.s === 'string' ? req.query.s : ''
-  if (share && album.share_token && share === album.share_token) return true
+  if (share && ((album.share_token && share === album.share_token) || db.prepare('SELECT 1 FROM album_links WHERE token = ? AND album_id = ? AND revoked_at IS NULL').get(share, album.id))) return true
   // Public gallery landing: the gallery's designated public album, or its splash image.
   const gslug = typeof req.query.g === 'string' ? req.query.g : ''
   if (gslug) {

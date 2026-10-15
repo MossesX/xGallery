@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { Copy, ExternalLink, HelpCircle, Image as ImageIcon, Sparkles, TextSelect } from 'lucide-react'
-import { useAiStatus, useMe } from '../api/hooks'
+import { Copy, ExternalLink, Globe, HelpCircle, Image as ImageIcon, Link2, Lock, Sparkles, TextSelect } from 'lucide-react'
+import { useAiStatus, useCreateLink, useMe, useTogglePublic } from '../api/hooks'
 import { useUI } from '../store/ui'
 
 interface MenuState {
@@ -11,6 +11,7 @@ interface MenuState {
   element: string
   href: string | null
   img: string | null
+  album: { id: number; slug: string; title: string; isPublic: boolean; manage: boolean } | null
 }
 
 /** Describe the right-clicked element for the assistant: nearest album/media/person/title. */
@@ -39,7 +40,11 @@ export function ContextMenu() {
   const notify = useUI((s) => s.notify)
   const [menu, setMenu] = useState<MenuState | null>(null)
   const location = useLocation()
-  const enabled = !!me && !!status?.allowed
+  const togglePublic = useTogglePublic()
+  const createLink = useCreateLink()
+  // The menu is for every signed-in member; assistant items appear only for accounts allowed to use it.
+  const enabled = !!me
+  const ai = !!status?.allowed
 
   useEffect(() => {
     if (!enabled) return
@@ -54,14 +59,18 @@ export function ContextMenu() {
       const a = target.closest('a') as HTMLAnchorElement | null
       const img = target.closest('img') as HTMLImageElement | null
       const x = Math.min(e.clientX, window.innerWidth - 260)
-      const y = Math.min(e.clientY, window.innerHeight - 240)
-      setMenu({ x, y, selection, element: describe(target), href: a?.href ?? null, img: img?.currentSrc ?? null })
+      const y = Math.min(e.clientY, window.innerHeight - 300)
+      const al = target.closest('[data-album-id]') as HTMLElement | null
+      const ownerId = al?.dataset.albumOwner ? Number(al.dataset.albumOwner) : null
+      const manage = !!al && (al.dataset.albumManage === '1' || me?.role === 'owner' || (ownerId != null && ownerId === me?.id))
+      const album = al ? { id: Number(al.dataset.albumId), slug: al.dataset.albumSlug ?? '', title: al.dataset.albumTitle ?? '', isPublic: al.dataset.albumPublic === '1', manage } : null
+      setMenu({ x, y, selection, element: describe(target), href: a?.href ?? null, img: img?.currentSrc ?? null, album })
     }
     const close = () => setMenu(null)
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') close()
       // Ctrl/Cmd + J opens the assistant from anywhere.
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'j') {
+      if (ai && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'j') {
         e.preventDefault()
         open({ context: { url: location.pathname, title: document.title } })
       }
@@ -76,7 +85,7 @@ export function ContextMenu() {
       document.removeEventListener('scroll', close, true)
       document.removeEventListener('keydown', onKey)
     }
-  }, [enabled, open, location.pathname])
+  }, [enabled, ai, open, location.pathname, me?.id, me?.role])
 
   if (!enabled || !menu) return null
   const ctx = { url: location.pathname + location.search, title: document.title }
@@ -95,18 +104,38 @@ export function ContextMenu() {
   )
   return (
     <div className="ctx-menu" style={{ left: menu.x, top: menu.y }} role="menu" onClick={(e) => e.stopPropagation()}>
-      <div className="ctx-head">
-        <Sparkles size={12} /> {name}
-      </div>
-      {menu.selection && item('Ask about the selection', <TextSelect size={14} />, () => open({ text: 'Explain this:', context: { ...ctx, selection: menu.selection } }))}
-      {item(`Ask about this ${menu.img ? 'image' : 'element'}`, menu.img ? <ImageIcon size={14} /> : <HelpCircle size={14} />, () => open({ text: `What is this and how does it work?`, context: { ...ctx, element: menu.element + (menu.img ? ` (image ${menu.img})` : '') } }))}
-      {item('Explain this page', <HelpCircle size={14} />, () => open({ text: 'Explain what this page does and how it is built.', context: ctx }))}
-      {item(`Open ${name}`, <Sparkles size={14} />, () => open({ context: ctx }))}
-      <div className="ctx-sep" />
+      {menu.album && (
+        <>
+          <div className="ctx-head">
+            <Globe size={12} /> Album · {menu.album.title.slice(0, 28)}
+          </div>
+          {item('Open album', <ExternalLink size={14} />, () => window.location.assign(`/album/${menu.album!.slug}`))}
+          {menu.album.manage &&
+            item(
+              menu.album.isPublic ? 'Make album private (buddies & members)' : 'Make album public',
+              menu.album.isPublic ? <Lock size={14} /> : <Globe size={14} />,
+              () => togglePublic.mutate({ albumId: menu.album!.id, makePublic: !menu.album!.isPublic }, { onSuccess: () => notify(menu.album!.isPublic ? 'Album is now for buddies & members' : 'Album is now public', 'success'), onError: (e: Error) => notify(e.message, 'error') }),
+            )}
+          {menu.album.manage && item('Create private link (copies it)', <Link2 size={14} />, () => createLink.mutate({ albumId: menu.album!.id }, { onSuccess: (l) => notify(`Private link copied: ${l.fullUrl}`, 'success'), onError: (e: Error) => notify(e.message, 'error') }))}
+          <div className="ctx-sep" />
+        </>
+      )}
+      {ai && (
+        <>
+          <div className="ctx-head">
+            <Sparkles size={12} /> {name}
+          </div>
+          {menu.selection && item('Ask about the selection', <TextSelect size={14} />, () => open({ text: 'Explain this:', context: { ...ctx, selection: menu.selection } }))}
+          {item(`Ask about this ${menu.img ? 'image' : 'element'}`, menu.img ? <ImageIcon size={14} /> : <HelpCircle size={14} />, () => open({ text: `What is this and how does it work?`, context: { ...ctx, element: menu.element + (menu.img ? ` (image ${menu.img})` : '') } }))}
+          {item('Explain this page', <HelpCircle size={14} />, () => open({ text: 'Explain what this page does and how it is built.', context: ctx }))}
+          {item(`Open ${name}`, <Sparkles size={14} />, () => open({ context: ctx }))}
+          <div className="ctx-sep" />
+        </>
+      )}
       {menu.selection && item('Copy selection', <Copy size={14} />, () => navigator.clipboard.writeText(menu.selection).then(() => notify('Copied', 'success')))}
       {menu.href && item('Open link in new tab', <ExternalLink size={14} />, () => window.open(menu.href!, '_blank', 'noopener'))}
       {item('Copy page link', <Copy size={14} />, () => navigator.clipboard.writeText(window.location.href).then(() => notify('Link copied', 'success')))}
-      <div className="ctx-hint muted">Shift + right-click for the browser menu · Ctrl/⌘ J opens {name}</div>
+      <div className="ctx-hint muted">Shift + right-click for the browser menu{ai ? ` · Ctrl/⌘ J opens ${name}` : ''}</div>
     </div>
   )
 }
