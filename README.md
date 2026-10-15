@@ -73,9 +73,16 @@ site. Members sign in to browse, like and comment.
   toolbar into a sectioned menu (Go to / Tools / Account) on narrow screens.
 
 **Owner password recovery**
-- Forgot the owner password? Set the `RESET_OWNER_PASSWORD` repository secret (8+ characters) and
-  deploy: the owner account gets that password once, every session is ended, and a note lands in the
-  owner feed. The same value is never applied twice, so remove the secret right after signing in.
+- On the sign-in page, type `password` as the username and `reset` as the password: a dialog asks
+  for a recovery key and a new owner password, then signs you in. A key is one of the single-use
+  recovery codes generated in Owner console → Policies, or the current `RESET_OWNER_PASSWORD`
+  deploy secret. Five wrong keys block the dialog for 15 minutes; every attempt is logged and
+  notified.
+- No key at hand? Set the `RESET_OWNER_PASSWORD` repository secret (8+ characters) and deploy: the
+  owner account gets that password once, every session is ended, and a note lands in the owner
+  feed. The same value is never applied twice (the deploy log says what happened), so remove the
+  secret right after signing in. As a last resort, on the VPS:
+  `docker exec -i xgallery-app node -e 'const {DatabaseSync}=require("node:sqlite"),{pbkdf2Sync,randomBytes}=require("node:crypto");const db=new DatabaseSync("/data/gallery.db");const s=randomBytes(16).toString("hex");db.prepare("UPDATE users SET password_hash=?,salt=?,must_change_password=0,disabled=0 WHERE role=\x27owner\x27").run(pbkdf2Sync(process.argv[1],s,120000,32,"sha256").toString("hex"),s);db.prepare("DELETE FROM sessions").run();console.log("owner password set")' 'NewPassword123'`
 
 **Theming**
 - Every theme carries a matched light *and* dark palette, display/body fonts, corner radius and density.

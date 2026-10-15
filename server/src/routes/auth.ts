@@ -1,6 +1,7 @@
 import { Router } from 'express'
-import { db, now } from '../db.js'
-import { attemptsFor, createSession, destroySession, hashPassword, loginFailed, loginSucceeded, loginThrottle, newSalt, publicUser, requireUser, returningOwner, setSessionCookie, verifyPassword } from '../auth.js'
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
+import { db, getSetting, now, setSetting } from '../db.js'
+import { attemptsFor, createSession, destroySession, hashPassword, loginFailed, loginSucceeded, loginThrottle, newSalt, publicUser, requireOwner, requireUser, returningOwner, setSessionCookie, verifyPassword } from '../auth.js'
 import { HttpError, str, wrap, IdRow } from '../util.js'
 import { track, logActivity } from '../activity.js'
 import { notifyOwner } from '../notifications.js'
@@ -120,5 +121,91 @@ authRouter.post(
     logActivity({ userId: row?.id ?? null, kind: 'auth.forgot_password', targetLabel: who, ip: req.ip ?? '' })
     // Always the same answer, so the form cannot be used to probe for accounts.
     res.json({ ok: true })
+  }),
+)
+
+/* ---------- owner recovery (typing username "password" + password "reset" on the sign-in page) ---------- */
+
+interface RecoveryCode { hash: string; usedAt: number | null }
+const codeHash = (code: string) => createHash('sha256').update(`owner-recovery:${code.replace(/[^a-z0-9]/gi, '').toLowerCase()}`).digest('hex')
+const recoveryCodes = () => getSetting<{ codes: RecoveryCode[]; generatedAt: number }>('ownerRecoveryCodes', { codes: [], generatedAt: 0 })
+const envKey = () => (process.env.RESET_OWNER_PASSWORD ?? '').trim()
+const same = (a: string, b: string) => a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b))
+const firstOwner = () => db.prepare("SELECT * FROM users WHERE role = 'owner' ORDER BY id LIMIT 1").get() as IdRow | undefined
+
+/** What the recovery dialog can offer: the deploy secret, unused recovery codes, or nothing yet. */
+authRouter.get('/owner-recovery', (_req, res) => {
+  const rc = recoveryCodes()
+  res.json({ viaSecret: !!envKey(), codesLeft: rc.codes.filter((c) => !c.usedAt).length, owner: firstOwner()?.username ?? null })
+})
+
+/**
+ * Reset the owner password with a recovery key: the RESET_OWNER_PASSWORD deploy secret, or one of the
+ * single-use recovery codes generated in the owner console. Heavily throttled; every attempt is logged.
+ */
+authRouter.post(
+  '/owner-recovery',
+  wrap((req, res) => {
+    const key = str(req.body?.key, 200).trim()
+    const password = typeof req.body?.password === 'string' ? req.body.password : ''
+    try {
+      loginThrottle(`recover:${req.ip}`, 5)
+    } catch (e) {
+      logActivity({ userId: null, kind: 'security.owner_recovery_throttled', ip: req.ip ?? '' })
+      throw new HttpError(429, (e as Error).message)
+    }
+    const owner = firstOwner()
+    if (!owner) throw new HttpError(400, 'There is no owner account to recover')
+    const minLen = getPolicy().minPasswordLength
+    if (password.length < minLen) throw new HttpError(400, `New password must be at least ${minLen} characters`)
+    const rc = recoveryCodes()
+    const env = envKey()
+    let via: 'secret' | 'code' | null = null
+    if (key && env && same(key, env)) via = 'secret'
+    else if (key) {
+      const h = codeHash(key)
+      const hit = rc.codes.find((c) => !c.usedAt && same(c.hash, h))
+      if (hit) {
+        hit.usedAt = now()
+        setSetting('ownerRecoveryCodes', rc)
+        via = 'code'
+      }
+    }
+    if (!via) {
+      loginFailed(`recover:${req.ip}`)
+      logActivity({ userId: owner.id as number, kind: 'security.owner_recovery_failed', ip: req.ip ?? '' })
+      notifyOwner({ kind: 'security.owner_recovery_failed', title: 'Someone tried to reset the owner password with a wrong recovery key', body: `From ${req.ip}. If this was not you, rotate your recovery codes and the RESET_OWNER_PASSWORD secret.`, data: { ip: req.ip } })
+      throw new HttpError(401, env || rc.codes.some((c) => !c.usedAt) ? 'That recovery key is not right' : 'No recovery key exists yet: set the RESET_OWNER_PASSWORD secret and deploy, or use the docker command in the README')
+    }
+    const salt = newSalt()
+    db.prepare('UPDATE users SET salt = ?, password_hash = ?, must_change_password = 0, disabled = 0 WHERE id = ?').run(salt, hashPassword(password, salt), owner.id)
+    for (const t of db.prepare('SELECT token FROM sessions WHERE user_id = ?').all(owner.id) as { token: string }[]) endSessionsForLogin(t.token, 'owner-recovery')
+    db.prepare('DELETE FROM sessions WHERE user_id = ?').run(owner.id)
+    loginSucceeded(`recover:${req.ip}`)
+    logActivity({ userId: owner.id as number, kind: 'security.owner_recovery', targetLabel: via, ip: req.ip ?? '' })
+    notifyOwner({ kind: 'security.owner_reset', title: `Owner password reset from the sign-in page (${via === 'secret' ? 'deploy secret' : 'recovery code'})`, body: `From ${req.ip}. Every other session was signed out.${via === 'code' ? ` ${rc.codes.filter((c) => !c.usedAt).length} recovery code(s) left.` : ' Remove the RESET_OWNER_PASSWORD secret if you no longer need it.'}`, data: { ip: req.ip, via } })
+    const token = createSession(owner.id as number)
+    setSessionCookie(res, token)
+    db.prepare("UPDATE users SET last_seen_at = ?, status = 'active' WHERE id = ?").run(now(), owner.id)
+    res.json({ ok: true, via, user: publicUser(db.prepare('SELECT * FROM users WHERE id = ?').get(owner.id) as IdRow) })
+  }),
+)
+
+/** Recovery codes: the owner generates a fresh set (shown once) after confirming the account password. */
+authRouter.get('/owner-recovery/codes', requireOwner, (_req, res) => {
+  const rc = recoveryCodes()
+  res.json({ total: rc.codes.length, remaining: rc.codes.filter((c) => !c.usedAt).length, generatedAt: rc.generatedAt || null, viaSecret: !!envKey() })
+})
+authRouter.post(
+  '/owner-recovery/codes',
+  requireOwner,
+  wrap((req, res) => {
+    const password = typeof req.body?.password === 'string' ? req.body.password : ''
+    const row = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user!.id) as IdRow
+    if (!verifyPassword(password, row.salt as string, row.password_hash as string)) throw new HttpError(400, 'Your account password is not right')
+    const codes = Array.from({ length: 8 }, () => randomBytes(6).toString('hex').match(/.{4}/g)!.join('-'))
+    setSetting('ownerRecoveryCodes', { codes: codes.map((c) => ({ hash: codeHash(c), usedAt: null })), generatedAt: now() })
+    logActivity({ userId: req.user!.id, kind: 'security.owner_recovery_codes', ip: req.ip ?? '' })
+    res.json({ codes, generatedAt: now() })
   }),
 )

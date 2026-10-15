@@ -5,6 +5,7 @@ import { useUiConfig } from '../ui/config'
 import { PublicShell } from '../components/PublicShell'
 import { useUI } from '../store/ui'
 import { AmberMark } from '../brand/Logo'
+import { OwnerRecoveryDialog } from '../components/OwnerRecoveryDialog'
 
 export function LoginPage() {
   const { data: user, isLoading } = useMe()
@@ -17,6 +18,7 @@ export function LoginPage() {
   const location = useLocation()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [recovering, setRecovering] = useState(false)
   const from = (location.state as { from?: string } | null)?.from ?? '/'
 
   if (isLoading) return null
@@ -24,6 +26,12 @@ export function LoginPage() {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
+    // Username "password" + password "reset" opens owner recovery instead of signing in.
+    if (username.trim().toLowerCase() === 'password' && password === 'reset') {
+      setPassword('')
+      setRecovering(true)
+      return
+    }
     try {
       await login.mutateAsync({ username, password })
       setSessionEnded(false)
@@ -61,6 +69,7 @@ export function LoginPage() {
             No account? {data?.policy?.acceptRequests === false ? 'The owner is not taking requests right now.' : <><Link to="/request-account">Request one from the owner</Link>{data?.policy?.publicBrowsing === false ? '' : <>, or <Link to="/">browse public albums</Link></>}.</>} {ui.flags.forgotPassword !== false && <Link to="/forgot-password">Forgot your password?</Link>}
           </p>
         </form>
+        {recovering && <OwnerRecoveryDialog onClose={() => setRecovering(false)} />}
       </main>
     </PublicShell>
   )

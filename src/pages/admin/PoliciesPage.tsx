@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Layers, Plus, Save, ShieldCheck, Trash2, Users } from 'lucide-react'
+import { Copy, KeyRound, Layers, LifeBuoy, Plus, Save, ShieldCheck, Trash2, Users } from 'lucide-react'
 import { api } from '../../api/client'
 import { useGroups, usePolicy } from '../../api/hooks'
 import type { Group, Limits, Perms, SitePolicy } from '../../api/types'
@@ -126,6 +126,7 @@ export function PoliciesPage() {
         </section>
 
         <div className="stack" style={{ gap: 'calc(var(--space) * 3)' }}>
+          <OwnerRecoveryCard />
           <section className="card stack" style={{ gap: 12 }}>
             <h3 style={{ margin: 0 }}>Site switches</h3>
             <label className="checkbox between">
@@ -285,5 +286,70 @@ export function PoliciesPage() {
         )}
       </Modal>
     </div>
+  )
+}
+
+/** Recovery codes for the owner account: single-use keys for the sign-in page's owner recovery (username "password", password "reset"). */
+function OwnerRecoveryCard() {
+  const qc = useQueryClient()
+  const notify = useUI((s) => s.notify)
+  const { data } = useQuery({ queryKey: ['owner-recovery-codes'], queryFn: () => api.get<{ total: number; remaining: number; generatedAt: number | null; viaSecret: boolean }>('/api/auth/owner-recovery/codes') })
+  const [password, setPassword] = useState('')
+  const [codes, setCodes] = useState<string[] | null>(null)
+  const gen = useMutation({
+    mutationFn: () => api.post<{ codes: string[] }>('/api/auth/owner-recovery/codes', { password }),
+    onSuccess: (r) => {
+      setCodes(r.codes)
+      setPassword('')
+      qc.invalidateQueries({ queryKey: ['owner-recovery-codes'] })
+      notify('New recovery codes generated; the old ones no longer work', 'success')
+    },
+    onError: (e: Error) => notify(e.message, 'error'),
+  })
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(codes!.join('\n'))
+      notify('Codes copied', 'success')
+    } catch {
+      notify('Could not copy; select the codes by hand', 'error')
+    }
+  }
+  return (
+    <section className="card stack" style={{ gap: 10 }} data-owner-recovery-card="">
+      <h3 style={{ margin: 0 }}>
+        <LifeBuoy size={16} /> Owner recovery
+      </h3>
+      <p className="muted small" style={{ margin: 0 }}>
+        Locked out? On the sign-in page type <span className="mono">password</span> as the username and <span className="mono">reset</span> as the password: a dialog asks for a recovery key and a new owner password. A key is one of the codes below (each works once) or the <span className="mono">RESET_OWNER_PASSWORD</span> deploy secret{data?.viaSecret ? ' (currently set)' : ''}.
+      </p>
+      <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+        <span className="chip" data-owner-recovery-remaining={data?.remaining ?? ''}>{data ? `${data.remaining} of ${data.total} codes unused` : '…'}</span>
+        {data?.generatedAt && <span className="muted small">generated {new Date(data.generatedAt).toLocaleString()}</span>}
+      </div>
+      {codes ? (
+        <div className="stack" style={{ gap: 6 }} data-owner-recovery-codes="">
+          <div className="error">Write these down now: they are shown only once.</div>
+          <pre className="mono" style={{ margin: 0, padding: 10, borderRadius: 8, background: 'var(--c-bg)', border: '1px solid var(--c-border)', fontSize: '0.9rem' }}>{codes.join('\n')}</pre>
+          <div className="row" style={{ gap: 6 }}>
+            <button className="btn sm" onClick={copy}>
+              <Copy size={12} /> Copy
+            </button>
+            <button className="btn ghost sm" onClick={() => setCodes(null)}>
+              Done, I saved them
+            </button>
+          </div>
+        </div>
+      ) : (
+        <form className="row" style={{ gap: 6, alignItems: 'flex-end', flexWrap: 'wrap' }} onSubmit={(e) => { e.preventDefault(); gen.mutate() }}>
+          <div className="field grow">
+            <label htmlFor="rec-gen-pw">Your account password</label>
+            <input id="rec-gen-pw" className="input sm" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required data-owner-recovery-gen-password="" />
+          </div>
+          <button className="btn primary sm" disabled={!password || gen.isPending} data-owner-recovery-generate="">
+            <KeyRound size={12} /> {data?.total ? 'Generate new codes' : 'Generate codes'}
+          </button>
+        </form>
+      )}
+    </section>
   )
 }
