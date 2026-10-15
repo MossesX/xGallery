@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, NavLink, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Braces, Code2, Gauge, FolderGit2, History, KeyRound, LayoutTemplate, LifeBuoy, ListTodo, Lock, Menu, MousePointerClick, Palette, PanelBottom, PanelTop, Plug, Ruler, ScrollText, Server, Settings2, ShieldAlert, SlidersHorizontal, Smartphone, Sparkles, TerminalSquare, ToggleLeft, Unlock, Wand2, WifiOff } from 'lucide-react'
+import { Braces, Code2, FolderTree, Gauge, FolderGit2, History, KeyRound, LayoutTemplate, LifeBuoy, ListTodo, Lock, Menu, MousePointerClick, Palette, PanelBottom, PanelTop, Plug, Ruler, ScrollText, Server, Settings2, ShieldAlert, SlidersHorizontal, Smartphone, Sparkles, TerminalSquare, ToggleLeft, Unlock, Wand2, WifiOff } from 'lucide-react'
 import { offlineState } from '../../api/client'
 
 /** "You are offline" / "showing cached data" bar for the panel (the service worker serves the last good copy). */
@@ -47,6 +47,7 @@ const LINKS = [
 const OPS = [
   { to: '/dev/vps', label: 'VPS manager', icon: Server },
   { to: '/dev/github', label: 'GitHub manager', icon: FolderGit2 },
+  { to: '/dev/commander', label: 'Filesystem commander', icon: FolderTree },
   { to: '/dev/terminal', label: 'Terminal · SSH', icon: Plug },
   { to: '/dev/ops', label: 'Command wizard', icon: Wand2 },
   { to: '/dev/shell', label: 'Remote shell · mosh', icon: TerminalSquare },
@@ -103,7 +104,7 @@ export function DevLayout() {
 
   const remaining = status.session ? Math.max(0, Math.round((status.session.lastActiveAt + status.sessionMinutes * 60_000 - Date.now()) / 60_000)) : 0
 
-  const wide = location.pathname.startsWith('/dev/tasks/workspace')
+  const wide = location.pathname.startsWith('/dev/tasks/workspace') || location.pathname.startsWith('/dev/commander')
   return (
     <main className={`page dev-page ${wide ? 'dev-wide-page' : ''}`}>
       <OfflineBar />

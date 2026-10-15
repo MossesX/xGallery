@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { db, getSetting, now } from '../db.js'
+import { db, getSetting, now, setSetting } from '../db.js'
 import { requireOwner, verifyPassword } from '../auth.js'
 import { HttpError, num, str, wrap, type IdRow } from '../util.js'
 import { logActivity } from '../activity.js'
@@ -532,5 +532,34 @@ devRouter.delete(
     forgetHost(String(req.params.host))
     recordEvent(req.devSession!.id, 'terminal.key', { summary: `Forgot the pinned host key of ${req.params.host}` })
     res.json({ ssh: publicSshConfig() })
+  }),
+)
+
+/* ---------- filesystem commander: favourites, custom snippets, history, preferences ---------- */
+
+interface CommanderData {
+  favorites: string[]
+  customs: { id: string; name: string; cat: string; sub: string; summary: string; tags: string[]; risk: string; template: string; opts: unknown[] }[]
+  history: { cmd: string; at: number; where: string }[]
+  prefs: Record<string, unknown>
+}
+const COMMANDER_EMPTY: CommanderData = { favorites: [], customs: [], history: [], prefs: {} }
+
+devRouter.get('/commander', requireDev, (_req, res) => res.json({ data: { ...COMMANDER_EMPTY, ...getSetting<Partial<CommanderData>>('devCommander', {}) } }))
+devRouter.put(
+  '/commander',
+  requireDev,
+  wrap((req, res) => {
+    const b = (req.body?.data ?? {}) as Partial<CommanderData>
+    const cur = { ...COMMANDER_EMPTY, ...getSetting<Partial<CommanderData>>('devCommander', {}) }
+    const next: CommanderData = {
+      favorites: Array.isArray(b.favorites) ? b.favorites.map((x) => str(x, 80)).filter(Boolean).slice(0, 500) : cur.favorites,
+      customs: Array.isArray(b.customs) ? b.customs.slice(0, 300).map((c) => ({ id: str(c?.id, 40) || `c${Date.now().toString(36)}`, name: str(c?.name, 80), cat: str(c?.cat, 40) || 'Custom', sub: str(c?.sub, 40) || 'Mine', summary: str(c?.summary, 300), tags: Array.isArray(c?.tags) ? c.tags.map((t: unknown) => str(t, 30)).filter(Boolean).slice(0, 12) : [], risk: ['safe', 'careful', 'danger'].includes(c?.risk) ? c.risk : 'careful', template: str(c?.template, 4000), opts: Array.isArray(c?.opts) ? c.opts.slice(0, 20) : [] })).filter((c) => c.name && c.template) : cur.customs,
+      history: Array.isArray(b.history) ? b.history.slice(0, 300).map((h) => ({ cmd: str(h?.cmd, 2000), at: num(h?.at, Date.now()), where: str(h?.where, 40) })).filter((h) => h.cmd) : cur.history,
+      prefs: typeof b.prefs === 'object' && b.prefs ? (JSON.parse(JSON.stringify(b.prefs).slice(0, 20_000)) as Record<string, unknown>) : cur.prefs,
+    }
+    setSetting('devCommander', next)
+    if (Array.isArray(b.customs) && JSON.stringify(b.customs) !== JSON.stringify(cur.customs)) recordEvent(req.devSession!.id, 'commander.customs', { summary: `Commander custom snippets saved (${next.customs.length})` })
+    res.json({ data: next })
   }),
 )

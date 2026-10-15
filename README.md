@@ -33,6 +33,17 @@ site. Members sign in to browse, like and comment.
   variables, webhook install, GitHub inbox, collaborators, and a raw API explorer. Failed runs,
   successful deploys, new PRs/issues and releases notify the owner in the site bell.
 
+**Developer panel: Filesystem commander**
+- A no-code way to drive the server: a library of 260+ commands (files, search, text, permissions,
+  archives, transfer, disk, processes, services, network, docker, git, packages, users, system,
+  xGallery) in a grid with expandable rows and nested sub-grids, a tree with a changeable root, or
+  cards, with search and instant filter chips (category, risk, tag, favourites).
+- Picking a command shows its options as switches, pickers (with a server-side folder browser) and
+  fields; the exact line is previewed and sent to the active SSH terminal tab, or pasted for editing.
+- Nested tab groups: SSH terminals and FTP (SFTP) clients, each with their own tabs; FTP snippets
+  run through the panel's SFTP connection, "terminal here" bridges a folder into a shell.
+- Favourites, history and your own snippets (with {placeholder} options) are stored on the server.
+
 **Theming**
 - Every theme carries a matched light *and* dark palette, display/body fonts, corner radius and density.
 - "Roll a theme" generates a harmonious theme (complementary / analogous / triadic / split / monochrome)
