@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Code2, Copy, ExternalLink, Globe, HelpCircle, Image as ImageIcon, Link2, Lock, Pencil, Settings, Sparkles, TextSelect, Wand2 } from 'lucide-react'
+import { Code2, Copy, ExternalLink, Globe, HelpCircle, Image as ImageIcon, Link2, ListTodo, Lock, Pencil, Settings, Sparkles, StickyNote, TextSelect, Wand2 } from 'lucide-react'
 import { settingsEntries } from './Banner'
 import { useAiStatus, useCreateLink, useMe, useTogglePublic } from '../api/hooks'
 import { useDevStatus } from '../api/dev'
@@ -110,6 +110,16 @@ export function ContextMenu() {
     }
   }, [enabled, ai, open, location.pathname, me?.id, me?.role])
 
+  // The menu grows with the role (settings, developer, tasks): once rendered, keep the whole of it inside the viewport.
+  const menuRef = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const el = menuRef.current
+    if (!el || !menu) return
+    const r = el.getBoundingClientRect()
+    const top = Math.max(8, Math.min(menu.y, window.innerHeight - r.height - 8))
+    const left = Math.max(8, Math.min(menu.x, window.innerWidth - r.width - 8))
+    if (top !== menu.y || left !== menu.x) setMenu({ ...menu, x: left, y: top })
+  }, [menu])
   if (!enabled || !menu) return null
   const ctx = { url: location.pathname + location.search, title: document.title }
   const name = status?.assistantName ?? 'Assistant'
@@ -130,7 +140,7 @@ export function ContextMenu() {
   const albumItems = menu.album && (cm.openAlbum || (menu.album.manage && (cm.togglePublic || cm.privateLink)))
 
   return (
-    <div className="ctx-menu" style={{ left: menu.x, top: menu.y }} role="menu" onClick={(e) => e.stopPropagation()}>
+    <div ref={menuRef} className="ctx-menu" style={{ left: menu.x, top: menu.y }} role="menu" onClick={(e) => e.stopPropagation()}>
       {albumItems && (
         <>
           <div className="ctx-head">
@@ -184,6 +194,10 @@ export function ContextMenu() {
           {devUnlocked && item(`Ask the developer AI about this ${menu.img ? 'image' : 'element'}`, <Sparkles size={14} />, () => navigate('/dev/assistant', { state: { prompt: `On page ${ctx.url} (${ctx.title}), the element "${menu.element}"${menu.selection ? ` with the selected text "${menu.selection.slice(0, 200)}"` : ''}: ` } }))}
           {devUnlocked && item(designMode ? 'Exit design mode' : 'Design mode (edit handles)', <Wand2 size={14} />, () => setDesignMode(!designMode))}
           {item(devUnlocked ? 'Developer panel' : 'Developer panel (unlock)', <Code2 size={14} />, () => navigate('/dev'))}
+          <div className="ctx-sub" data-ctx-tasks="">
+            {item('Tasks & notes', <ListTodo size={14} />, () => navigate('/dev/tasks/workspace'))}
+            {item(menu.selection ? 'New note from the selection' : 'New note about this page', <StickyNote size={14} />, () => navigate('/dev/tasks/workspace', { state: { newNote: { title: document.title, text: menu.selection ? `${menu.selection}\n\n${window.location.href}` : window.location.href } } }))}
+          </div>
           <div className="ctx-sep" />
         </>
       )}

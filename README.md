@@ -68,10 +68,13 @@ site. Members sign in to browse, like and comment.
 
 **Settings access**
 - Owners and admins get a settings gear in the banner that opens a menu of every settings page
-  (owner console, members, policies, assistant, themes & appearance, developer panel, my account;
+  (owner console, members, policies, assistant, themes & appearance, developer panel, tasks & notes, my account;
   admins see their console, members, gallery and account). The same entries sit in a Settings
   section of the phone menu and of the right-click context menu. Both can be switched off in
   Developer → Toolbar and Developer → Context menu.
+- The task manager (notes, to-dos, tasks) is reachable from the settings gear, the owner console menu,
+  the developer overview's quick actions and the context menu's Developer section, which also offers
+  "New note about this page" (or from the selected text).
 - Light is the default colour mode for every visitor and device; the light/dark/auto toggle still
   remembers a choice made after that.
 

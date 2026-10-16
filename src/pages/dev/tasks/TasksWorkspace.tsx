@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type DragEvent, type MouseEvent, type ReactNode } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ChevronDown, ChevronRight, Download, ExternalLink, Folder, FolderPlus, ListTodo, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Pencil, Pin, Plus, Trash2, X } from 'lucide-react'
 import { useTaskLists, useTaskMutations, useTaskTypes, type TaskList } from '../../../api/tasks'
 import { Modal } from '../../../components/Modal'
@@ -151,8 +151,25 @@ export function TasksWorkspace() {
   const notify = useUI((s) => s.notify)
   const { data: lists } = useTaskLists()
   const { data: types } = useTaskTypes()
-  const { createList, updateList, deleteList, bulk } = useTaskMutations()
+  const { createList, updateList, deleteList, bulk, createEntry } = useTaskMutations()
   const layout = useTasksLayout()
+  // Arriving from the context menu ("New note about this page") seeds a note in the first list (made if none).
+  const location = useLocation()
+  const navigate = useNavigate()
+  const seeded = useRef(false)
+  useEffect(() => {
+    const seed = (location.state as { newNote?: { title: string; text: string } } | null)?.newNote
+    if (!seed || !lists || seeded.current) return
+    seeded.current = true
+    navigate(location.pathname, { replace: true, state: null })
+    const place = (listId: number) =>
+      createEntry.mutate(
+        { listId, kind: 'note', title: seed.title.slice(0, 120) || 'Note', body: seed.text, draft: true },
+        { onSuccess: () => { layout.openTab(listId); notify('Note added', 'success') }, onError: (e: Error) => notify(e.message, 'error') },
+      )
+    if (lists.length) place(lists[0].id)
+    else createList.mutate({ title: 'Notes' }, { onSuccess: (l) => place(l.id), onError: (e: Error) => notify(e.message, 'error') })
+  }, [lists]) // eslint-disable-line react-hooks/exhaustive-deps
   const [menuState, setMenuState] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null)
   const [prompt, setPrompt] = useState<{ title: string; value: string; cb: (v: string) => void } | null>(null)
   const [closeAsk, setCloseAsk] = useState<number | null>(null)

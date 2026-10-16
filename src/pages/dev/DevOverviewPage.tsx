@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Code2, FileDiff, GitCommitHorizontal, History, LifeBuoy, Palette, ScrollText, Sparkles, Wand2 } from 'lucide-react'
+import { Code2, FileDiff, GitCommitHorizontal, History, LifeBuoy, ListTodo, Palette, ScrollText, Sparkles, Wand2 } from 'lucide-react'
 import { useDevOverview } from '../../api/dev'
 import { useSettings } from '../../api/hooks'
 import { formatDate } from '../../components/Comments'
@@ -105,6 +105,9 @@ export function DevOverviewPage() {
         <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
           <Link to="/dev/code" className="btn sm">
             <Code2 size={13} /> Open the code editor
+          </Link>
+          <Link to="/dev/tasks/workspace" className="btn sm" data-quick-tasks="">
+            <ListTodo size={13} /> Tasks & notes
           </Link>
           <Link to="/dev/navigation" className="btn sm">
             Edit navigation

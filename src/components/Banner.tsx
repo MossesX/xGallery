@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { Bell, Code2, Eye, FlaskConical, Images, LogIn, LogOut, Menu as MenuIcon, Palette, Search, Settings, Settings2, ShieldCheck, Sparkles, UserCog, UserPlus, Users, X } from 'lucide-react'
+import { Bell, Code2, Eye, FlaskConical, Images, ListTodo, LogIn, LogOut, Menu as MenuIcon, Palette, Search, Settings, Settings2, ShieldCheck, Sparkles, UserCog, UserPlus, Users, X } from 'lucide-react'
 import { useAiStatus, useLogout, useMe, useNotifUnread, useSession, useSettings, useUnread } from '../api/hooks'
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
@@ -37,6 +37,7 @@ export function settingsEntries(role: string | undefined): { to: string; label: 
       { to: '/admin/assistant', label: 'Assistant settings', icon: <Sparkles size={15} /> },
       { to: '/dev/themes', label: 'Themes & appearance', icon: <Palette size={15} /> },
       { to: '/dev', label: 'Developer panel', icon: <Code2 size={15} /> },
+      { to: '/dev/tasks/workspace', label: 'Tasks & notes', icon: <ListTodo size={15} /> },
       { to: '/me', label: 'My account', icon: <UserCog size={15} /> },
     ]
   }
