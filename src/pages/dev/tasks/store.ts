@@ -35,7 +35,12 @@ interface TasksLayout {
   views: Record<number, ListView>
   listsPanel: { docked: boolean; floating: Floating; width: number }
   previewWidth: number
+  /** Panes the user has hidden from the Panes menu. */
+  listsHidden: boolean
+  previewHidden: boolean
   nextZ: number
+  toggleLists: () => void
+  togglePreview: () => void
   openTab: (id: number) => void
   closeTab: (id: number) => void
   setActive: (id: number | null) => void
@@ -61,7 +66,11 @@ export const useTasksLayout = create<TasksLayout>()(
       views: {},
       listsPanel: { docked: true, floating: { ...FLOAT, x: 40, y: 120, w: 300, h: 480 }, width: 260 },
       previewWidth: 380,
+      listsHidden: false,
+      previewHidden: false,
       nextZ: 2,
+      toggleLists: () => set((s) => ({ listsHidden: !s.listsHidden })),
+      togglePreview: () => set((s) => ({ previewHidden: !s.previewHidden })),
       openTab: (id) =>
         set((s) => {
           if (s.floating[id]) return { activeTab: s.activeTab }

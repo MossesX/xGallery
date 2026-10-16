@@ -96,7 +96,7 @@ export function ContextMenuLayer({ state, onClose }: { state: { x: number; y: nu
         </div>
       ) : it.children ? (
         <div key={i} className="ctx-sub" onMouseEnter={() => depth === 0 && setSub(i)}>
-          <button className="ctx-item" disabled={it.disabled} onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+          <button className="ctx-item" disabled={it.disabled} onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); setSub(sub === i ? null : i) }} data-ctx-parent={it.label}>
             {it.icon} {it.label} <span className="ctx-arrow">›</span>
           </button>
           {sub === i && (

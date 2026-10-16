@@ -76,6 +76,9 @@ site. Members sign in to browse, like and comment.
   under the cursor, copy/open) and folds the rest into fly-out sub-menus: the assistant, Settings,
   Developer (panel, developer AI, design mode, Tasks & notes, "New note about this page") and extra
   links. Sub-menus flip or shift to stay on screen and unfold in place on phones.
+- Inside the task manager, every context menu (top bar, tab strip, tabs, lists column) carries a
+  **Panes** sub-menu listing the lists column, the preview pane and every list window with a check
+  (visible) or a cross (hidden); picking one toggles it, and the choice is remembered.
 - The task manager (notes, to-dos, tasks) is reachable from the settings gear, the owner console menu,
   the developer overview's quick actions and the context menu's Developer sub-menu.
 - Light is the default colour mode for every visitor and device; the light/dark/auto toggle still

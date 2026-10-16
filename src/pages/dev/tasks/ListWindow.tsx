@@ -33,6 +33,7 @@ export function ListWindow({ listId, allLists, types, onPrompt, onListMenuItems 
   const view = useMemo(() => ({ ...DEFAULT_VIEW, ...(viewRaw ?? {}) }), [viewRaw])
   const setView = useTasksLayout((s) => s.setView)
   const previewWidth = useTasksLayout((s) => s.previewWidth)
+  const previewHidden = useTasksLayout((s) => s.previewHidden)
   const setPreviewWidth = useTasksLayout((s) => s.setPreviewWidth)
   const { createEntry, createList, bulk, updateEntry, reorder } = useTaskMutations()
   const selection = useSelection()
@@ -201,6 +202,8 @@ export function ListWindow({ listId, allLists, types, onPrompt, onListMenuItems 
         <div className="lw-main">{view.mode === 'tree' ? <TreeView {...viewProps} /> : <GridView {...viewProps} />}</div>
         {view.mode === 'tree' && (
           <>
+            {!previewHidden && (
+              <>
             <div
               className="lw-resize"
               onMouseDown={(ev) => {
@@ -224,6 +227,8 @@ export function ListWindow({ listId, allLists, types, onPrompt, onListMenuItems 
                 </div>
               )}
             </aside>
+              </>
+            )}
           </>
         )}
       </div>

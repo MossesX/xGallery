@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type DragEvent, type MouseEvent, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { ChevronDown, ChevronRight, Download, ExternalLink, Folder, FolderPlus, ListTodo, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Pencil, Pin, Plus, Trash2, X } from 'lucide-react'
+import { Check, ChevronDown, ChevronRight, Download, ExternalLink, Folder, FolderPlus, ListTodo, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, PanelsTopLeft, Pencil, Pin, Plus, Trash2, X } from 'lucide-react'
 import { useTaskLists, useTaskMutations, useTaskTypes, type TaskList } from '../../../api/tasks'
 import { Modal } from '../../../components/Modal'
 import { useUI } from '../../../store/ui'
@@ -69,7 +69,7 @@ function FloatingWindow({ title, icon, pos, onMove, onRaise, onDock, onClose, on
 
 /* ---------- lists column ---------- */
 
-function ListsColumn({ lists, onOpen, onFloat, menuItems, onNewList, onDropEntries }: { lists: TaskList[]; onOpen: (id: number) => void; onFloat: (id: number) => void; menuItems: (l: TaskList) => MenuItem[]; onNewList: () => void; onDropEntries: (payload: DragPayload, listId: number) => void }) {
+function ListsColumn({ lists, onOpen, onFloat, menuItems, onNewList, onDropEntries, extraItems }: { lists: TaskList[]; onOpen: (id: number) => void; onFloat: (id: number) => void; menuItems: (l: TaskList) => MenuItem[]; onNewList: () => void; onDropEntries: (payload: DragPayload, listId: number) => void; extraItems?: MenuItem[] }) {
   const menu = useMenu()
   const { updateList, reorderLists } = useTaskMutations()
   const notify = useUI((s) => s.notify)
@@ -131,7 +131,7 @@ function ListsColumn({ lists, onOpen, onFloat, menuItems, onNewList, onDropEntri
     )
   }
   return (
-    <div className="lists-column" onContextMenu={(e) => { if ((e.target as Element).closest('.lists-row')) return; e.preventDefault(); menu.open(e, [{ head: 'Lists' }, { label: 'New list', icon: <Plus size={14} />, onClick: onNewList }]) }} data-lists-column="">
+    <div className="lists-column" onContextMenu={(e) => { if ((e.target as Element).closest('.lists-row')) return; e.preventDefault(); menu.open(e, [{ head: 'Lists' }, { label: 'New list', icon: <Plus size={14} />, onClick: onNewList }, ...(extraItems ?? [])]) }} data-lists-column="">
       {roots.map((l) => row(l, 0))}
       {roots.length === 0 && (
         <div className="muted small" style={{ padding: 12 }}>
@@ -211,6 +211,36 @@ export function TasksWorkspace() {
   }
   const dropEntries = (p: DragPayload, listId: number) => p.type === 'entries' && bulk.mutate({ ids: p.ids, action: 'move', listId }, { onSuccess: (r) => notify(`${r.count} moved`, 'success'), onError: err })
 
+  // "Panes": every pane with a check (visible) or a cross (hidden); picking one toggles it.
+  const panesItem = (): MenuItem => {
+    const mark = (on: boolean) => (on ? <Check size={14} className="mark-on" /> : <X size={14} className="mark-off" />)
+    const visible = (id: number) => layout.tabs.includes(id) || (!!layout.floating[id] && !layout.floating[id].minimized)
+    const toggleList = (id: number) => {
+      if (visible(id)) {
+        if (layout.floating[id]) layout.moveFloating(id, { minimized: true })
+        else layout.closeTab(id)
+      } else if (layout.floating[id]) {
+        layout.moveFloating(id, { minimized: false })
+        layout.raise(id)
+      } else layout.openTab(id)
+    }
+    return {
+      label: 'Panes',
+      icon: <PanelsTopLeft size={14} />,
+      children: [
+        { label: 'Lists column', icon: mark(!layout.listsHidden), onClick: () => layout.toggleLists() },
+        { label: 'Preview pane', icon: mark(!layout.previewHidden), onClick: () => layout.togglePreview() },
+        { sep: true },
+        { head: 'List windows' },
+        ...(lists ?? []).map((l) => ({ label: l.title, icon: mark(visible(l.id)), onClick: () => toggleList(l.id) })),
+      ],
+    }
+  }
+  const workspaceMenu = (e: MouseEvent) => {
+    if ((e.target as Element).closest('.tab, .lists-row, input, textarea, button')) return
+    e.preventDefault()
+    menuApi.open(e, [{ head: 'Workspace' }, panesItem(), { label: 'New list', icon: <Plus size={14} />, onClick: () => newList(null) }])
+  }
   const tabMenu = (e: MouseEvent, l: TaskList) =>
     menuApi.open(e, [
       { head: `Tab · ${l.title.slice(0, 28)}` },
@@ -219,6 +249,8 @@ export function TasksWorkspace() {
       { label: 'Close tab', icon: <X size={14} />, onClick: () => layout.closeTab(l.id) },
       { label: 'Close other tabs', onClick: () => layout.tabs.filter((t) => t !== l.id).forEach((t) => layout.closeTab(t)) },
       { label: 'Export as markdown', icon: <Download size={14} />, onClick: () => window.open(`/api/dev/tasks/lists/${l.id}/export.md`, '_blank') },
+      { sep: true },
+      panesItem(),
       { sep: true },
       { label: 'Delete list', icon: <Trash2 size={14} />, danger: true, onClick: () => remove(l) },
     ])
@@ -254,14 +286,14 @@ export function TasksWorkspace() {
           {lp.docked ? <PanelLeftOpen size={13} /> : <PanelLeftClose size={13} />}
         </button>
       </div>
-      <ListsColumn lists={lists} onOpen={(id) => (layout.floating[id] ? layout.raise(id) : layout.openTab(id))} onFloat={(id) => layout.float(id)} menuItems={listMenuItems} onNewList={() => newList(null)} onDropEntries={dropEntries} />
+      <ListsColumn lists={lists} onOpen={(id) => (layout.floating[id] ? layout.raise(id) : layout.openTab(id))} onFloat={(id) => layout.float(id)} menuItems={listMenuItems} onNewList={() => newList(null)} onDropEntries={dropEntries} extraItems={[{ sep: true }, panesItem()]} />
     </>
   )
 
   return (
     <MenuContext.Provider value={menuApi}>
       <div className="tasks-app" ref={rootRef} onDragOver={(e) => { if (hasDrag(e)) e.preventDefault() }} onDrop={onRootDrop}>
-        <div className="tasks-topbar">
+        <div className="tasks-topbar" onContextMenu={workspaceMenu} data-tasks-topbar="">
           <Link to="/dev" className="btn ghost sm">
             ← Developer panel
           </Link>
@@ -283,7 +315,7 @@ export function TasksWorkspace() {
         </div>
 
         <div className="tasks-body">
-          {lp.docked && (
+          {lp.docked && !layout.listsHidden && (
             <aside className="tasks-lists" style={{ width: lp.width }} draggable onDragStart={(e) => { if ((e.target as Element).closest('.lists-row')) return; setDrag(e, { type: 'panel', id: 'lists' }) }} data-lists-panel="docked">
               {listsPanelBody}
             </aside>
@@ -291,6 +323,7 @@ export function TasksWorkspace() {
           <div className="tasks-dock">
             <div
               className="tab-strip"
+              onContextMenu={workspaceMenu}
               onDragOver={(e) => { if (hasDrag(e)) e.preventDefault() }}
               onDrop={(e) => {
                 const p = getDrag(e)
@@ -370,7 +403,7 @@ export function TasksWorkspace() {
             </FloatingWindow>
           )
         })}
-        {!lp.docked && (
+        {!lp.docked && !layout.listsHidden && (
           <FloatingWindow dataId="lists" title="Lists" icon={panelIcon} pos={lp.floating} onMove={(p) => layout.moveListsPanel(p)} onRaise={() => layout.moveListsPanel({ z: layout.nextZ })} onDock={() => layout.setListsPanel({ docked: true })} onClose={() => layout.setListsPanel({ docked: true })} onMinimize={() => layout.moveListsPanel({ minimized: !lp.floating.minimized })} dragPayload={{ type: 'panel', id: 'lists' }}>
             <div className="tasks-lists tasks-lists-float">{listsPanelBody}</div>
           </FloatingWindow>

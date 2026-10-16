@@ -2002,3 +2002,5 @@ button.link { background: none; border: 0; padding: 0; color: var(--c-primary); 
 @media (max-width: 640px), (hover: none) {
   .ctx-flyout, .ctx-flyout.flip { position: static; margin: 2px 0 4px 14px; padding: 2px 0 2px 8px; min-width: 0; border: 0; border-left: 2px solid var(--c-border); border-radius: 0; box-shadow: none; background: transparent; }
 }
+.ctx-item .mark-on { color: var(--c-success, #16a34a); }
+.ctx-item .mark-off { color: var(--c-text-muted); }
