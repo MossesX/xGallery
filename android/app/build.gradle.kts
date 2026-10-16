@@ -13,8 +13,10 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
-        buildConfigField("String", "PANEL_URL", "\"https://xgallery.amberxai.com/dev\"")
-        buildConfigField("String", "PANEL_HOST", "\"xgallery.amberxai.com\"")
+        buildConfigField("String", "PANEL_URL", "\"https://dev.xgallery.amberxai.com/dev\"")
+        buildConfigField("String", "PANEL_HOST", "\"dev.xgallery.amberxai.com\"")
+        buildConfigField("String", "SITE_URL", "\"https://xgallery.amberxai.com/dev\"")
+        buildConfigField("String", "SITE_HOST", "\"xgallery.amberxai.com\"")
     }
 
     buildFeatures {

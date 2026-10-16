@@ -19,7 +19,7 @@ export function LoginPage() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [recovering, setRecovering] = useState(false)
-  const from = (location.state as { from?: string } | null)?.from ?? '/'
+  const from = (location.state as { from?: string } | null)?.from ?? (data?.panel?.mode ? '/dev' : '/')
   const closed = (location.state as { reason?: string } | null)?.reason === 'closed'
 
   if (isLoading) return null

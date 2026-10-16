@@ -38,6 +38,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="xgallery.amberxai.com" />
+                <data android:scheme="https" android:host="dev.xgallery.amberxai.com" />
             </intent-filter>
         </activity>
     </application>

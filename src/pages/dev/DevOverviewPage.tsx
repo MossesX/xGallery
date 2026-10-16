@@ -1,10 +1,12 @@
 import { Link } from 'react-router-dom'
 import { Code2, FileDiff, GitCommitHorizontal, History, LifeBuoy, Palette, ScrollText, Sparkles, Wand2 } from 'lucide-react'
 import { useDevOverview } from '../../api/dev'
+import { useSettings } from '../../api/hooks'
 import { formatDate } from '../../components/Comments'
 import { useUI } from '../../store/ui'
 
 export function DevOverviewPage() {
+  const { data: site } = useSettings()
   const { data, isLoading } = useDevOverview()
   const setDesignMode = useUI((s) => s.setDesignMode)
   if (isLoading || !data) return <div className="muted">Loading…</div>
@@ -16,6 +18,7 @@ export function DevOverviewPage() {
           <div className="eyebrow">Developer</div>
           <h1 style={{ margin: 0 }}>{data.site.title} developer panel</h1>
           <p className="muted" style={{ margin: '6px 0 0' }}>
+            {site?.panel?.mode ? <span className="chip chip-tag" title={`This panel runs on its own server (${site.panel.panelDomain}); deploying the site never restarts it`}>Panel server</span> : <span className="chip" title="This panel is served by the site's own container; a site deploy restarts it">Shared with the site</span>}{' '}
             Source snapshot <code>{data.status.sourceVersion}</code> · workspace at <code>{w.head || 'n/a'}</code> · {data.ai.subscription ? 'Claude subscription connected' : data.ai.api ? 'Claude API connected' : 'no Claude backend yet'}
           </p>
         </div>

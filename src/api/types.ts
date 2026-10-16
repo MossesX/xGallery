@@ -158,6 +158,13 @@ export interface TimelineItem extends MediaItem {
   day: string
 }
 
+/** Which server answered: the site itself, or the developer panel's own server that shares the site's data. */
+export interface PanelInfo {
+  mode: boolean
+  siteDomain: string
+  panelDomain: string
+}
+
 export interface Session {
   user: User | null
   viewingAs: { owner: { id: number; displayName: string } } | null

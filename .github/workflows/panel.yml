@@ -1,0 +1,71 @@
+name: Deploy the developer panel server
+
+# The developer panel runs as its own container from the `panel` branch (see docker-compose.panel.yml).
+# Pushing to `panel` rebuilds only that container; the site (main branch, deploy.yml) is untouched,
+# and the other way round, so a site deploy never drops the panel or its sign-in.
+on:
+  push:
+    branches: [panel]
+  workflow_dispatch:
+
+env:
+  PANEL_DOMAIN: dev.xgallery.amberxai.com
+  SITE_DOMAIN: xgallery.amberxai.com
+  VPS_HOST: 31.97.13.252
+
+jobs:
+  deploy-panel:
+    runs-on: ubuntu-latest
+    concurrency: deploy-panel
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check deploy secrets are present
+        env:
+          HAS_PASSWORD: ${{ secrets.VPS_PASSWORD != '' }}
+          HAS_KEY: ${{ secrets.VPS_SSH_KEY != '' }}
+        run: |
+          if [ "$HAS_PASSWORD" != "true" ] && [ "$HAS_KEY" != "true" ]; then
+            echo "::error::Neither VPS_PASSWORD nor VPS_SSH_KEY is set as a Repository secret on this repository."
+            exit 1
+          fi
+      - name: Copy source to the VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ env.VPS_HOST }}
+          username: ${{ secrets.VPS_USER || 'root' }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "."
+          target: /opt/xgallery-panel
+          overwrite: true
+      - name: Build and start the panel container
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ env.VPS_HOST }}
+          username: ${{ secrets.VPS_USER || 'root' }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          command_timeout: 20m
+          script: |
+            set -e
+            cd /opt/xgallery-panel
+            export PANEL_DOMAIN="${{ env.PANEL_DOMAIN }}"
+            export SITE_DOMAIN="${{ env.SITE_DOMAIN }}"
+            export SOURCE_VERSION="${{ github.sha }}"
+            export HOSTINGER_API_TOKEN="${{ secrets.HOSTINGER_API_TOKEN }}"
+            if ! docker network inspect coolify >/dev/null 2>&1; then echo "::error::The coolify network is missing: deploy the site first"; exit 1; fi
+            if ! docker volume inspect xgallery_data >/dev/null 2>&1; then echo "::error::The xgallery_data volume is missing: deploy the site first"; exit 1; fi
+            docker compose -p xgallery-panel -f docker-compose.panel.yml up -d --build --remove-orphans
+            docker image prune -f >/dev/null
+            docker compose -p xgallery-panel -f docker-compose.panel.yml ps
+            echo "Site container (untouched): $(docker ps --filter name=xgallery-app --format '{{.Names}} {{.Status}}')"
+      - name: Verify the panel answers
+        run: |
+          echo "DNS for ${PANEL_DOMAIN}: $(getent hosts "${PANEL_DOMAIN}" | awk '{print $1}' | paste -sd, || echo 'does not resolve')"
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "https://${PANEL_DOMAIN}/healthz" || true)
+            echo "attempt $i: HTTPS /healthz -> $code"
+            [ "$code" = "200" ] && exit 0
+            sleep 10
+          done
+          echo "::warning::The panel container is running but https://${PANEL_DOMAIN} does not answer yet. Add an A record for ${PANEL_DOMAIN} pointing at ${VPS_HOST} (VPS manager → Sites & DNS, or hPanel); Traefik issues the certificate once it resolves."

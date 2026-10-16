@@ -89,7 +89,10 @@ class MainActivity : AppCompatActivity() {
 
             override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
                 // Only the main document matters; the service worker normally serves it offline.
-                if (request.isForMainFrame && !isOnline()) view.loadUrl("file:///android_asset/offline.html")
+                if (!request.isForMainFrame) return
+                if (!isOnline()) { view.loadUrl("file:///android_asset/offline.html"); return }
+                // The panel's own server is preferred; while its hostname is not set up yet, fall back to the panel inside the site.
+                if (request.url.host == BuildConfig.PANEL_HOST) view.loadUrl(BuildConfig.SITE_URL)
             }
         }
         web.webChromeClient = object : WebChromeClient() {
@@ -128,7 +131,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun startUrl(intent: Intent?): String {
         val data = intent?.data
-        return if (data != null && data.host == BuildConfig.PANEL_HOST) data.toString() else BuildConfig.PANEL_URL
+        return if (data != null && (data.host == BuildConfig.PANEL_HOST || data.host == BuildConfig.SITE_HOST)) data.toString() else BuildConfig.PANEL_URL
     }
 
     override fun onResume() {

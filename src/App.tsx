@@ -105,6 +105,8 @@ function Root() {
   if (!user && site?.policy && !site.policy.publicBrowsing) return <Navigate to="/login" replace state={{ reason: 'closed' }} />
   if (!user) return <PublicHomePage />
   if (user.mustChangePassword) return <Navigate to="/change-password" replace />
+  // On the developer panel's own server the owner lands in the panel, not on the member home.
+  if (site?.panel?.mode && user.role === 'owner') return <Navigate to="/dev" replace />
   return (
     <AppShell>
       <HomePage />

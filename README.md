@@ -160,6 +160,21 @@ src/
 Theming works purely through CSS custom properties set on `<html>` (`--c-*`, `--font-*`,
 `--radius`, `--scale`). Any component that uses those variables is automatically themeable.
 
+## Developer panel on its own server
+
+The developer panel can run as a second container built from the **`panel`** branch
+(`docker-compose.panel.yml`, workflow `panel.yml`). It shares the site's data volume, so accounts,
+sessions, settings and media are the same, but it answers on its own hostname
+(`dev.xgallery.amberxai.com`) and is deployed independently: a site deploy (push to `main`) never
+restarts the panel or drops its developer sign-in, and a panel deploy (push to `panel`) never
+touches the site. The Android app opens the panel host and falls back to the panel inside the site
+while that hostname is not set up.
+
+- DNS: add an A record for `dev.xgallery.amberxai.com` → the VPS address (VPS manager → Sites & DNS,
+  or hPanel). Traefik issues the certificate once it resolves.
+- Keep the panel current: merge `main` into `panel` (`git checkout panel && git merge main && git
+  push`) or open a pull request from `main` to `panel` in the GitHub manager.
+
 ## Deployment
 
 See [deploy/README.md](deploy/README.md) for the Docker image, the Compose stack with automatic HTTPS,

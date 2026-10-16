@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { getOps } from '../ops.js'
 import { db, getSetting, setSetting } from '../db.js'
 import { requireAdmin, requireOwner } from '../auth.js'
 import { isOwner, managedGalleryIds } from '../access.js'
@@ -23,6 +24,8 @@ settingsRouter.get(
     res.json({
       settings: s,
       policy: { publicBrowsing: policy.publicBrowsing, acceptRequests: policy.acceptRequests },
+      // Which server answered: the site, or the developer panel's own server (XG_PANEL=1) that shares its data.
+      panel: { mode: process.env.XG_PANEL === '1', siteDomain: process.env.SITE_DOMAIN || getOps().domain, panelDomain: process.env.PANEL_DOMAIN || '' },
       ui: getUi(),
       theme: theme
         ? { id: theme.id, name: theme.name, light: JSON.parse(theme.light as string), dark: JSON.parse(theme.dark as string), fontDisplay: theme.font_display, fontBody: theme.font_body, radius: theme.radius, scale: theme.scale, builtIn: !!theme.built_in, createdAt: theme.created_at }

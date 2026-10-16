@@ -28,6 +28,8 @@ import { setupPublicRouter, setupRouter } from './routes/setup.js'
 import { attachDev, sweepDevSessions } from './dev.js'
 import { adminRouter } from './routes/admin.js'
 
+/** This process serves the developer panel on its own host (docker-compose.panel.yml) rather than the site. */
+export const PANEL_MODE = process.env.XG_PANEL === '1'
 ensureSeeded()
 applyOwnerPasswordReset()
 // The demo community is opt-in for development (XG_DEMO=1); production data stays real.

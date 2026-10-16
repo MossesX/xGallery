@@ -1,0 +1,51 @@
+# The developer panel on its own server: a second container built from the `panel` branch, sharing the
+# gallery's data volume (accounts, sessions, settings, media) but registered with Traefik under its own
+# hostname. Deploying the site never restarts it, so the panel stays up and signed in; deploying the
+# panel never touches the site.
+#
+#   PANEL_DOMAIN=dev.xgallery.amberxai.com docker compose -p xgallery-panel -f docker-compose.panel.yml up -d --build
+services:
+  panel:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SOURCE_VERSION: ${SOURCE_VERSION:-dev}
+    image: xgallery-panel:local
+    container_name: xgallery-panel
+    restart: unless-stopped
+    environment:
+      XG_PANEL: "1"
+      PANEL_DOMAIN: ${PANEL_DOMAIN:-dev.xgallery.amberxai.com}
+      SITE_DOMAIN: ${SITE_DOMAIN:-xgallery.amberxai.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
+      HOSTINGER_API_TOKEN: ${HOSTINGER_API_TOKEN:-}
+    volumes:
+      - xgallery_data:/data
+    networks:
+      - coolify
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: coolify
+      traefik.http.routers.xgallery-panel-http.rule: Host(`${PANEL_DOMAIN:-dev.xgallery.amberxai.com}`)
+      traefik.http.routers.xgallery-panel-http.entrypoints: http
+      traefik.http.routers.xgallery-panel-http.middlewares: xgallery-panel-redirect
+      traefik.http.routers.xgallery-panel-https.rule: Host(`${PANEL_DOMAIN:-dev.xgallery.amberxai.com}`)
+      traefik.http.routers.xgallery-panel-https.entrypoints: https
+      traefik.http.routers.xgallery-panel-https.tls: "true"
+      traefik.http.routers.xgallery-panel-https.tls.certresolver: letsencrypt
+      traefik.http.routers.xgallery-panel-https.service: xgallery-panel
+      traefik.http.routers.xgallery-panel-http.service: xgallery-panel
+      traefik.http.services.xgallery-panel.loadbalancer.server.port: "3000"
+      traefik.http.middlewares.xgallery-panel-redirect.redirectscheme.scheme: https
+      traefik.http.middlewares.xgallery-panel-redirect.redirectscheme.permanent: "true"
+
+networks:
+  coolify:
+    external: true
+
+volumes:
+  # The site's volume (created by the `xgallery` compose project): both servers work on the same data.
+  xgallery_data:
+    external: true
+    name: xgallery_data
