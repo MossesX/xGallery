@@ -149,7 +149,18 @@ export function pingCli(token: string, model: string | undefined, timeoutMs = 90
         parsed = null
       }
       if (code === 0 && parsed && !parsed.is_error) resolve({ ok: true, detail: `Claude Code answered: ${String(parsed.result ?? '').trim().slice(0, 80) || 'ok'}` })
-      else resolve({ ok: false, detail: (parsed?.result ?? err.trim().split('\n').slice(-2).join(' ') ?? `exit code ${code}`).toString().slice(0, 300) || `exit code ${code}` })
+      else {
+        const raw = (parsed?.result ?? err.trim().split('\n').slice(-2).join(' ') ?? `exit code ${code}`).toString().slice(0, 300) || `exit code ${code}`
+        // Translate Claude Code's own wording into what to do about it.
+        const hint = /invalid api key|please run \/login|authentication|401|unauthori[sz]ed|not logged in/i.test(raw)
+          ? ' → Claude Code rejected this token. Make a fresh one: run "claude setup-token" on a machine with your Claude subscription, finish the browser sign-in, paste the code back into that terminal, then copy the whole sk-ant-oat01-… token it prints into the panel.'
+          : /rate limit|429|overloaded/i.test(raw)
+            ? ' → the token works but the plan is rate-limited right now; try again in a few minutes.'
+            : /subscription|plan|billing|not available/i.test(raw)
+              ? ' → the account behind this token has no Claude Code access (Pro or Max plan needed).'
+              : ''
+        resolve({ ok: false, detail: `${raw}${hint}` })
+      }
     })
   })
 }
