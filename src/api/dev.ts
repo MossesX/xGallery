@@ -25,10 +25,10 @@ export interface UiSection {
 
 export interface UiConfig {
   nav: { items: UiLink[] }
-  toolbar: { clock: boolean; search: boolean; bell: boolean; newAlbums: boolean; adminBell: boolean; assistant: boolean; colorMode: boolean; signOut: boolean; buttons: UiLink[] }
+  toolbar: { clock: boolean; search: boolean; bell: boolean; newAlbums: boolean; adminBell: boolean; settings: boolean; assistant: boolean; colorMode: boolean; signOut: boolean; buttons: UiLink[] }
   footer: { text: string; links: UiLink[]; poweredBy: boolean }
   home: { sections: UiSection[] }
-  contextMenu: { openAlbum: boolean; togglePublic: boolean; privateLink: boolean; askSelection: boolean; askElement: boolean; explainPage: boolean; openAssistant: boolean; copySelection: boolean; openLink: boolean; copyPageLink: boolean; custom: UiLink[] }
+  contextMenu: { openAlbum: boolean; togglePublic: boolean; privateLink: boolean; askSelection: boolean; askElement: boolean; explainPage: boolean; openAssistant: boolean; settings: boolean; copySelection: boolean; openLink: boolean; copyPageLink: boolean; custom: UiLink[] }
   css: string
   flags: Record<string, boolean>
   banner: { brand: 'amberx' | 'text'; accent: string; sticky: boolean; dense: boolean; showProduct: boolean }

@@ -65,6 +65,15 @@ export const useUI = create<UIState>()(
       notify: (message, tone = 'info') => set({ toast: { id: Date.now(), message, tone } }),
       dismissToast: () => set({ toast: null }),
     }),
-    { name: 'xgallery-ui', partialize: (s) => ({ colorMode: s.colorMode, assistantConversationId: s.assistantConversationId }) },
+    {
+      name: 'xgallery-ui',
+      version: 2,
+      partialize: (s) => ({ colorMode: s.colorMode, assistantConversationId: s.assistantConversationId }),
+      // v2: light is the default for everyone; a mode persisted before that is reset once (the toggle still works afterwards).
+      migrate: (persisted, version) => {
+        const p = (persisted ?? {}) as { colorMode?: ColorMode; assistantConversationId?: number | null }
+        return { colorMode: version < 2 ? 'light' : (p.colorMode ?? 'light'), assistantConversationId: p.assistantConversationId ?? null }
+      },
+    },
   ),
 )

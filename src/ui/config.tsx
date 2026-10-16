@@ -19,7 +19,7 @@ export const DEFAULT_UI: UiConfig = {
   nav: {
     items: [link('home', 'Home', '/', 'Home'), link('galleries', 'Galleries', '/galleries', 'Users', 'members'), link('explore', 'People', '/public', 'Users', 'guests'), link('photos', 'Photos', '/photos', 'LayoutGrid', 'members'), link('saved', 'Saved', '/favorites', 'Bookmark', 'members'), link('messages', 'Messages', '/me/messages', 'MessageCircle', 'members'), link('admin', 'Admin', '/admin', 'Settings2', 'admins')],
   },
-  toolbar: { clock: true, search: true, bell: true, newAlbums: true, adminBell: true, assistant: true, colorMode: true, signOut: true, buttons: [] },
+  toolbar: { clock: true, search: true, bell: true, newAlbums: true, adminBell: true, settings: true, assistant: true, colorMode: true, signOut: true, buttons: [] },
   footer: { text: '', links: [link('public', 'Public galleries', '/public', 'Globe'), link('me', 'My space', '/me', 'UserCircle2', 'members'), link('contact', 'Contact the owner', '/contact', 'Mail', 'members'), link('request', 'Request an account', '/request-account', 'UserPlus', 'guests'), link('login', 'Member sign in', '/login', 'LogIn', 'guests')], poweredBy: true },
   home: {
     sections: [
@@ -28,7 +28,7 @@ export const DEFAULT_UI: UiConfig = {
       { id: 'albums', type: 'albums', enabled: true, title: 'All albums', html: '' },
     ],
   },
-  contextMenu: { openAlbum: true, togglePublic: true, privateLink: true, askSelection: true, askElement: true, explainPage: true, openAssistant: true, copySelection: true, openLink: true, copyPageLink: true, custom: [] },
+  contextMenu: { openAlbum: true, togglePublic: true, privateLink: true, askSelection: true, askElement: true, explainPage: true, openAssistant: true, settings: true, copySelection: true, openLink: true, copyPageLink: true, custom: [] },
   css: '',
   flags: { reactions: true, favorites: true, comments: true, timeline: true, zipDownload: true, buddies: true, messaging: true, publicDirectory: true, requestAccount: true, forgotPassword: true, galleryThemes: true, shareLinks: true, collaborators: true },
   banner: { brand: 'amberx', accent: '#ff7a1a', sticky: true, dense: false, showProduct: true },

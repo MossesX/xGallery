@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { Bell, Eye, FlaskConical, Images, LogIn, LogOut, Menu as MenuIcon, Search, Settings2, Sparkles, UserPlus, X } from 'lucide-react'
+import { Bell, Code2, Eye, FlaskConical, Images, LogIn, LogOut, Menu as MenuIcon, Palette, Search, Settings, Settings2, ShieldCheck, Sparkles, UserCog, UserPlus, Users, X } from 'lucide-react'
 import { useAiStatus, useLogout, useMe, useNotifUnread, useSession, useSettings, useUnread } from '../api/hooks'
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
@@ -26,6 +26,82 @@ function Clock() {
 }
 
 const external = (to: string) => /^(https?:)?\/\//i.test(to) || to.startsWith('mailto:')
+
+/** Where the settings gear leads: the owner console for owners and admins, plus the account's own settings. */
+export function settingsEntries(role: string | undefined): { to: string; label: string; icon: React.ReactNode }[] {
+  if (role === 'owner') {
+    return [
+      { to: '/admin', label: 'Owner console', icon: <Settings size={15} /> },
+      { to: '/admin/users', label: 'Members & roles', icon: <Users size={15} /> },
+      { to: '/admin/policies', label: 'Policies & switches', icon: <ShieldCheck size={15} /> },
+      { to: '/admin/assistant', label: 'Assistant settings', icon: <Sparkles size={15} /> },
+      { to: '/dev/themes', label: 'Themes & appearance', icon: <Palette size={15} /> },
+      { to: '/dev', label: 'Developer panel', icon: <Code2 size={15} /> },
+      { to: '/me', label: 'My account', icon: <UserCog size={15} /> },
+    ]
+  }
+  if (role === 'admin') {
+    return [
+      { to: '/admin', label: 'Admin console', icon: <Settings size={15} /> },
+      { to: '/admin/users', label: 'Members', icon: <Users size={15} /> },
+      { to: '/me/gallery', label: 'My gallery settings', icon: <Palette size={15} /> },
+      { to: '/me', label: 'My account', icon: <UserCog size={15} /> },
+    ]
+  }
+  return []
+}
+
+/** The settings gear in the toolbar (owner and admins): a small menu of every settings page. */
+function SettingsGear({ role }: { role: string }) {
+  const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState({ top: 64, left: 12 })
+  const ref = useRef<HTMLDivElement>(null)
+  const location = useLocation()
+  useEffect(() => setOpen(false), [location.pathname])
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => ref.current && !ref.current.contains(e.target as Node) && setOpen(false)
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+  const entries = settingsEntries(role)
+  if (!entries.length) return null
+  return (
+    <div className="settings-gear" ref={ref} data-settings-gear={open ? 'open' : 'closed'}>
+      <button
+        className={`btn ghost icon sm banner-bell ${open ? 'active' : ''}`}
+        title="Settings"
+        aria-label="Settings"
+        aria-expanded={open}
+        onClick={(e) => {
+          const r = e.currentTarget.getBoundingClientRect()
+          setPos({ top: Math.round(r.bottom) + 8, left: Math.max(12, Math.min(Math.round(r.right) - 260, window.innerWidth - 272)) })
+          setOpen((o) => !o)
+        }}
+        data-settings-gear-btn=""
+      >
+        <Settings size={16} />
+      </button>
+      {open && (
+        <div className="banner-menu-panel settings-menu-panel" role="menu" style={{ top: pos.top, left: pos.left }} data-settings-menu="">
+          <div className="banner-menu-section">
+            <div className="eyebrow">Settings</div>
+            {entries.map((e) => (
+              <NavLink key={e.to} to={e.to} className="banner-menu-item" end={e.to === '/admin' || e.to === '/me' || e.to === '/dev'} onClick={() => setOpen(false)}>
+                {e.icon} {e.label}
+              </NavLink>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 /** A configured link: router link for paths, plain anchor for URLs. */
 export function UiLinkEl({ link, className, children }: { link: UiLink; className?: string; children?: React.ReactNode }) {
@@ -169,6 +245,7 @@ export function Banner() {
               {!!notif?.admin?.total && <span className="nav-badge bell-badge">{notif.admin.total}</span>}
             </NavLink>
           )}
+          {user && (user.role === 'owner' || user.role === 'admin') && tb.settings && <SettingsGear role={user.role} />}
           {user && ai?.allowed && tb.assistant && (
             <button className="btn sm banner-ai" onClick={() => openAssistant({ context: { url: location.pathname, title: document.title } })} title={`${ai.assistantName} · Ctrl/⌘ J`}>
               <Sparkles size={14} /> {ai.assistantName}
@@ -247,6 +324,16 @@ export function Banner() {
                   ))}
                 </div>
               )}
+              {user && tb.settings && settingsEntries(user.role).length > 0 && (
+                <div className="banner-menu-section" data-banner-menu-settings="">
+                  <div className="eyebrow">Settings</div>
+                  {settingsEntries(user.role).map((e) => (
+                    <NavLink key={e.to} to={e.to} className="banner-menu-item" end={e.to === '/admin' || e.to === '/me' || e.to === '/dev'}>
+                      {e.icon} {e.label}
+                    </NavLink>
+                  ))}
+                </div>
+              )}
               <div className="banner-menu-section">
                 <div className="eyebrow">Account</div>
                 {user ? (
@@ -254,11 +341,6 @@ export function Banner() {
                     <NavLink to="/me" className="banner-menu-item">
                       <Avatar name={user.display_name} size={20} src={user.avatarUrl} /> {user.display_name}
                     </NavLink>
-                    {user.role === 'owner' && (
-                      <NavLink to="/dev" className="banner-menu-item">
-                        <Settings2 size={15} /> Developer panel
-                      </NavLink>
-                    )}
                     {tb.colorMode && (
                       <div className="banner-menu-item static">
                         <ColorModeToggle /> <span>Light / dark</span>

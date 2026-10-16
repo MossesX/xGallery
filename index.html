@@ -15,6 +15,7 @@
       try {
         var ui = JSON.parse(localStorage.getItem('xgallery-ui') || '{}');
         var mode = (ui.state && ui.state.colorMode) || 'light';
+        if (!ui.version || ui.version < 2) mode = 'light';
         if (mode === 'system') mode = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
         document.documentElement.dataset.mode = mode;
         document.documentElement.style.colorScheme = mode;

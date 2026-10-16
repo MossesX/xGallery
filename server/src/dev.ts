@@ -274,10 +274,10 @@ export interface UiSection {
 
 export interface UiConfig {
   nav: { items: UiLink[] }
-  toolbar: { clock: boolean; search: boolean; bell: boolean; newAlbums: boolean; adminBell: boolean; assistant: boolean; colorMode: boolean; signOut: boolean; buttons: UiLink[] }
+  toolbar: { clock: boolean; search: boolean; bell: boolean; newAlbums: boolean; adminBell: boolean; settings: boolean; assistant: boolean; colorMode: boolean; signOut: boolean; buttons: UiLink[] }
   footer: { text: string; links: UiLink[]; poweredBy: boolean }
   home: { sections: UiSection[] }
-  contextMenu: { openAlbum: boolean; togglePublic: boolean; privateLink: boolean; askSelection: boolean; askElement: boolean; explainPage: boolean; openAssistant: boolean; copySelection: boolean; openLink: boolean; copyPageLink: boolean; custom: UiLink[] }
+  contextMenu: { openAlbum: boolean; togglePublic: boolean; privateLink: boolean; askSelection: boolean; askElement: boolean; explainPage: boolean; openAssistant: boolean; settings: boolean; copySelection: boolean; openLink: boolean; copyPageLink: boolean; custom: UiLink[] }
   css: string
   flags: Record<string, boolean>
   banner: { brand: 'amberx' | 'text'; accent: string; sticky: boolean; dense: boolean; showProduct: boolean }
@@ -290,7 +290,7 @@ export const DEFAULT_UI: UiConfig = {
   nav: {
     items: [link('home', 'Home', '/', 'Home'), link('galleries', 'Galleries', '/galleries', 'Users', 'members'), link('explore', 'People', '/public', 'Users', 'guests'), link('photos', 'Photos', '/photos', 'LayoutGrid', 'members'), link('saved', 'Saved', '/favorites', 'Bookmark', 'members'), link('messages', 'Messages', '/me/messages', 'MessageCircle', 'members'), link('admin', 'Admin', '/admin', 'Settings2', 'admins')],
   },
-  toolbar: { clock: true, search: true, bell: true, newAlbums: true, adminBell: true, assistant: true, colorMode: true, signOut: true, buttons: [] },
+  toolbar: { clock: true, search: true, bell: true, newAlbums: true, adminBell: true, settings: true, assistant: true, colorMode: true, signOut: true, buttons: [] },
   footer: { text: '', links: [link('public', 'Public galleries', '/public', 'Globe'), link('me', 'My space', '/me', 'UserCircle2', 'members'), link('contact', 'Contact the owner', '/contact', 'Mail', 'members'), link('request', 'Request an account', '/request-account', 'UserPlus', 'guests'), link('login', 'Member sign in', '/login', 'LogIn', 'guests')], poweredBy: true },
   home: {
     sections: [
@@ -299,7 +299,7 @@ export const DEFAULT_UI: UiConfig = {
       { id: 'albums', type: 'albums', enabled: true, title: 'All albums', html: '' },
     ],
   },
-  contextMenu: { openAlbum: true, togglePublic: true, privateLink: true, askSelection: true, askElement: true, explainPage: true, openAssistant: true, copySelection: true, openLink: true, copyPageLink: true, custom: [] },
+  contextMenu: { openAlbum: true, togglePublic: true, privateLink: true, askSelection: true, askElement: true, explainPage: true, openAssistant: true, settings: true, copySelection: true, openLink: true, copyPageLink: true, custom: [] },
   css: '',
   flags: { reactions: true, favorites: true, comments: true, timeline: true, zipDownload: true, buddies: true, messaging: true, publicDirectory: true, requestAccount: true, forgotPassword: true, galleryThemes: true, shareLinks: true, collaborators: true },
   banner: { brand: 'amberx', accent: '#ff7a1a', sticky: true, dense: false, showProduct: true },
@@ -388,11 +388,12 @@ export function sanitizeUi(input: unknown, base: UiConfig = DEFAULT_UI): UiConfi
   if (o.flags && typeof o.flags === 'object') for (const k of Object.keys(base.flags)) if (typeof o.flags[k] === 'boolean') flags[k] = o.flags[k] as boolean
   return {
     nav: { items: o.nav && Array.isArray(o.nav.items) ? cleanLinks(o.nav.items) : base.nav.items },
-    toolbar: { clock: b(tb.clock, base.toolbar.clock), search: b(tb.search, base.toolbar.search), bell: b(tb.bell, base.toolbar.bell), newAlbums: b(tb.newAlbums, base.toolbar.newAlbums), adminBell: b(tb.adminBell, base.toolbar.adminBell), assistant: b(tb.assistant, base.toolbar.assistant), colorMode: b(tb.colorMode, base.toolbar.colorMode), signOut: b(tb.signOut, base.toolbar.signOut), buttons: Array.isArray(tb.buttons) ? cleanLinks(tb.buttons, 8) : base.toolbar.buttons },
+    toolbar: { clock: b(tb.clock, base.toolbar.clock), search: b(tb.search, base.toolbar.search), bell: b(tb.bell, base.toolbar.bell), newAlbums: b(tb.newAlbums, base.toolbar.newAlbums), adminBell: b(tb.adminBell, base.toolbar.adminBell), settings: b(tb.settings, base.toolbar.settings), assistant: b(tb.assistant, base.toolbar.assistant), colorMode: b(tb.colorMode, base.toolbar.colorMode), signOut: b(tb.signOut, base.toolbar.signOut), buttons: Array.isArray(tb.buttons) ? cleanLinks(tb.buttons, 8) : base.toolbar.buttons },
     footer: { text: String(ft.text ?? base.footer.text).slice(0, 300), links: Array.isArray(ft.links) ? cleanLinks(ft.links) : base.footer.links, poweredBy: b(ft.poweredBy, base.footer.poweredBy) },
     home: { sections: sections.length ? sections : base.home.sections },
     contextMenu: {
       openAlbum: b(cm.openAlbum, base.contextMenu.openAlbum),
+      settings: b(cm.settings, base.contextMenu.settings),
       togglePublic: b(cm.togglePublic, base.contextMenu.togglePublic),
       privateLink: b(cm.privateLink, base.contextMenu.privateLink),
       askSelection: b(cm.askSelection, base.contextMenu.askSelection),

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Code2, Copy, ExternalLink, Globe, HelpCircle, Image as ImageIcon, Link2, Lock, Pencil, Sparkles, TextSelect, Wand2 } from 'lucide-react'
+import { Code2, Copy, ExternalLink, Globe, HelpCircle, Image as ImageIcon, Link2, Lock, Pencil, Settings, Sparkles, TextSelect, Wand2 } from 'lucide-react'
+import { settingsEntries } from './Banner'
 import { useAiStatus, useCreateLink, useMe, useTogglePublic } from '../api/hooks'
 import { useDevStatus } from '../api/dev'
 import { useUI } from '../store/ui'
@@ -156,6 +157,21 @@ export function ContextMenu() {
           {cm.askElement && item(`Ask about this ${menu.img ? 'image' : 'element'}`, menu.img ? <ImageIcon size={14} /> : <HelpCircle size={14} />, () => open({ text: `What is this and how does it work?`, context: { ...ctx, element: menu.element + (menu.img ? ` (image ${menu.img})` : '') } }))}
           {cm.explainPage && item('Explain this page', <HelpCircle size={14} />, () => open({ text: 'Explain what this page does and how it is built.', context: ctx }))}
           {cm.openAssistant && item(`Open ${name}`, <Sparkles size={14} />, () => open({ context: ctx }))}
+          <div className="ctx-sep" />
+        </>
+      )}
+      {cm.settings && (me?.role === 'owner' || me?.role === 'admin') && (
+        <>
+          <div className="ctx-head">
+            <Settings size={12} /> Settings
+          </div>
+          {settingsEntries(me.role)
+            .filter((e) => e.to !== '/dev')
+            .map((e) => (
+              <button key={e.to} className="ctx-item" onClick={(ev) => { ev.stopPropagation(); setMenu(null); navigate(e.to) }} data-ctx-settings={e.to}>
+                {e.icon} {e.label}
+              </button>
+            ))}
           <div className="ctx-sep" />
         </>
       )}
