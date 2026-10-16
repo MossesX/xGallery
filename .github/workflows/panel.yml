@@ -54,7 +54,9 @@ jobs:
             export SOURCE_VERSION="${{ github.sha }}"
             export HOSTINGER_API_TOKEN="${{ secrets.HOSTINGER_API_TOKEN }}"
             if ! docker network inspect coolify >/dev/null 2>&1; then echo "::error::The coolify network is missing: deploy the site first"; exit 1; fi
-            if ! docker volume inspect xgallery_data >/dev/null 2>&1; then echo "::error::The xgallery_data volume is missing: deploy the site first"; exit 1; fi
+            export DATA_VOLUME="$(docker volume ls -q | grep -E '^(xgallery_)?xgallery_data$' | head -1)"
+            if [ -z "$DATA_VOLUME" ]; then echo "::error::The site's data volume is missing: deploy the site first"; docker volume ls; exit 1; fi
+            echo "Sharing data volume: $DATA_VOLUME"
             docker compose -p xgallery-panel -f docker-compose.panel.yml up -d --build --remove-orphans
             docker image prune -f >/dev/null
             docker compose -p xgallery-panel -f docker-compose.panel.yml ps

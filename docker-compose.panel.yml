@@ -45,7 +45,8 @@ networks:
     external: true
 
 volumes:
-  # The site's volume (created by the `xgallery` compose project): both servers work on the same data.
+  # The site's volume (created by the `xgallery` compose project, so docker names it xgallery_xgallery_data):
+  # both servers work on the same data. panel.yml detects the actual name and passes it as DATA_VOLUME.
   xgallery_data:
     external: true
-    name: xgallery_data
+    name: ${DATA_VOLUME:-xgallery_xgallery_data}
