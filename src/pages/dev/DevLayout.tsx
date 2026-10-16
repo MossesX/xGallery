@@ -377,7 +377,27 @@ function SetPasswordScreen() {
 function UnlockScreen() {
   const qc = useQueryClient()
   const notify = useUI((s) => s.notify)
+  const location = useLocation()
   const [pw, setPw] = useState('')
+  const [resetting, setResetting] = useState(() => new URLSearchParams(location.search).get('reset') === '1' || location.pathname.startsWith('/dev/settings'))
+  const [account, setAccount] = useState('')
+  const [newPw, setNewPw] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const reset = useMutation({
+    mutationFn: () => {
+      if (newPw !== confirm) throw new Error('The two developer passwords do not match')
+      return api.post('/api/dev/password', { accountPassword: account, password: newPw })
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: devKeys.status })
+      setResetting(false)
+      setAccount('')
+      setNewPw('')
+      setConfirm('')
+      notify('Developer password reset. Unlock the panel with it.', 'success')
+    },
+    onError: (e: Error) => notify(e.message, 'error'),
+  })
   const unlock = useMutation({
     mutationFn: () => api.post('/api/dev/unlock', { password: pw }),
     onSuccess: () => {
@@ -409,8 +429,34 @@ function UnlockScreen() {
             <Unlock size={15} /> Unlock developer panel
           </button>
           <p className="muted small" style={{ margin: 0 }}>
-            Forgot it? Reset it from <Link to="/dev/settings?reset=1">developer settings</Link> with your account password · <Link to="/admin">owner console</Link>
+            Forgot it?{' '}
+            <button type="button" className="link-btn" onClick={() => setResetting((r) => !r)} data-dev-reset-toggle="">
+              Reset it with your account password
+            </button>{' '}
+            · <Link to="/admin">owner console</Link>
           </p>
+          {resetting && (
+            <div className="stack" style={{ gap: 10, paddingTop: 10, borderTop: '1px solid var(--c-border)' }} data-dev-reset="">
+              <p className="muted small" style={{ margin: 0 }}>The developer password is separate from your sign-in password. Prove it is you with the account password and choose a new developer password; the old one stops working at once.</p>
+              <div className="field">
+                <label htmlFor="dev-reset-account">Your account password</label>
+                <input id="dev-reset-account" className="input" type="password" autoComplete="current-password" value={account} onChange={(e) => setAccount(e.target.value)} data-dev-reset-account="" />
+              </div>
+              <div className="row" style={{ alignItems: 'flex-start' }}>
+                <div className="field grow">
+                  <label htmlFor="dev-reset-new">New developer password</label>
+                  <input id="dev-reset-new" className="input" type="password" autoComplete="new-password" value={newPw} onChange={(e) => setNewPw(e.target.value)} minLength={8} data-dev-reset-new="" />
+                </div>
+                <div className="field grow">
+                  <label htmlFor="dev-reset-confirm">Confirm</label>
+                  <input id="dev-reset-confirm" className="input" type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} data-dev-reset-confirm="" />
+                </div>
+              </div>
+              <button type="button" className="btn" disabled={reset.isPending || !account || newPw.length < 8 || !confirm} onClick={() => reset.mutate()} data-dev-reset-submit="">
+                <KeyRound size={15} /> Reset developer password
+              </button>
+            </div>
+          )}
         </div>
       </form>
     </main>
