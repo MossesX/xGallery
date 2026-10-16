@@ -1993,4 +1993,12 @@ button.link { background: none; border: 0; padding: 0; color: var(--c-primary); 
 .settings-gear { position: relative; }
 .settings-menu-panel { right: auto; width: 260px; }
 @media (max-width: 900px) { .banner-right .settings-gear { display: none; } }
-.ctx-sub { margin-left: 14px; padding-left: 8px; border-left: 2px solid var(--c-border); }
+.ctx-parent { position: relative; }
+.ctx-parent-btn { padding-right: 8px; }
+.ctx-chev { margin-left: auto; color: var(--c-text-muted); }
+.ctx-parent.open > .ctx-parent-btn { background: var(--c-surface-hover); }
+.ctx-flyout { position: absolute; left: calc(100% - 2px); top: -6px; min-width: 220px; animation: none; }
+.ctx-flyout.flip { left: auto; right: calc(100% - 2px); }
+@media (max-width: 640px), (hover: none) {
+  .ctx-flyout, .ctx-flyout.flip { position: static; margin: 2px 0 4px 14px; padding: 2px 0 2px 8px; min-width: 0; border: 0; border-left: 2px solid var(--c-border); border-radius: 0; box-shadow: none; background: transparent; }
+}

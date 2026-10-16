@@ -72,9 +72,12 @@ site. Members sign in to browse, like and comment.
   admins see their console, members, gallery and account). The same entries sit in a Settings
   section of the phone menu and of the right-click context menu. Both can be switched off in
   Developer → Toolbar and Developer → Context menu.
+- The right-click context menu keeps a short top level (album actions, "Edit the …" for the region
+  under the cursor, copy/open) and folds the rest into fly-out sub-menus: the assistant, Settings,
+  Developer (panel, developer AI, design mode, Tasks & notes, "New note about this page") and extra
+  links. Sub-menus flip or shift to stay on screen and unfold in place on phones.
 - The task manager (notes, to-dos, tasks) is reachable from the settings gear, the owner console menu,
-  the developer overview's quick actions and the context menu's Developer section, which also offers
-  "New note about this page" (or from the selected text).
+  the developer overview's quick actions and the context menu's Developer sub-menu.
 - Light is the default colour mode for every visitor and device; the light/dark/auto toggle still
   remembers a choice made after that.
 
