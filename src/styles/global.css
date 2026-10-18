@@ -2022,3 +2022,15 @@ button.link { background: none; border: 0; padding: 0; color: var(--c-primary); 
 .token-gate .input { width: 200px; }
 .token-gate-err { color: #dc2626; }
 .btn:disabled, .btn[disabled] { opacity: 0.45; cursor: not-allowed; filter: grayscale(0.6); }
+
+/* New-project wizard */
+.np-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 700px) { .np-fields { grid-template-columns: 1fr; } }
+.np-msg { display: flex; align-items: flex-start; gap: 6px; font-size: 0.85rem; padding: 5px 8px; border-radius: 8px; }
+.np-msg svg { flex: none; margin-top: 2px; }
+.np-msg.bad { background: color-mix(in srgb, #dc2626 10%, transparent); color: #b91c1c; }
+.np-msg.warn { background: color-mix(in srgb, #d97706 12%, transparent); }
+.np-msg.ok { background: color-mix(in srgb, #16a34a 10%, transparent); }
+.np-project { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--c-border); flex-wrap: wrap; }
+.np-secret { padding: 4px 8px; border-radius: 6px; background: var(--c-surface-2, var(--c-primary-soft)); word-break: break-all; user-select: all; }
+.np-first { max-height: 320px; overflow: auto; white-space: pre-wrap; }

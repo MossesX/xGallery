@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Braces, ChevronDown, ChevronRight, Code2, FolderTree, Gauge, FolderGit2, History, KeyRound, LayoutTemplate, LifeBuoy, ListChecks, ListTodo, Lock, Menu, MousePointerClick, Palette, PanelBottom, PanelTop, Plug, Ruler, ScrollText, Server, Settings2, ShieldAlert, SlidersHorizontal, Smartphone, Sparkles, TerminalSquare, ToggleLeft, Unlock, Wand2, WifiOff } from 'lucide-react'
+import { Braces, ChevronDown, ChevronRight, Code2, FolderPlus, FolderTree, Gauge, FolderGit2, History, KeyRound, LayoutTemplate, LifeBuoy, ListChecks, ListTodo, Lock, Menu, MousePointerClick, Palette, PanelBottom, PanelTop, Plug, Ruler, ScrollText, Server, Settings2, ShieldAlert, SlidersHorizontal, Smartphone, Sparkles, TerminalSquare, ToggleLeft, Unlock, Wand2, WifiOff } from 'lucide-react'
 import { offlineState } from '../../api/client'
 
 /** "You are offline" / "showing cached data" bar for the panel (the service worker serves the last good copy). */
@@ -95,6 +95,7 @@ const NAV: NavGroup[] = [
         label: 'Servers & code',
         items: [
           { to: '/dev/setup', label: 'One-click setup', icon: Wand2 },
+          { to: '/dev/new-project', label: 'New project', icon: FolderPlus },
           { to: '/dev/vps', label: 'VPS manager', icon: Server },
           { to: '/dev/github', label: 'GitHub manager', icon: FolderGit2 },
           { to: '/dev/commander', label: 'Filesystem commander', icon: FolderTree },

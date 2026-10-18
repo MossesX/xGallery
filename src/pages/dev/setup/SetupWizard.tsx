@@ -19,11 +19,11 @@ import { useUI } from '../../../store/ui'
  * for the key Termux uploads, and installs it on the server.
  */
 
-type StepState = 'pending' | 'running' | 'ok' | 'skipped' | 'failed' | 'waiting'
+export type StepState = 'pending' | 'running' | 'ok' | 'skipped' | 'failed' | 'waiting'
 interface StepView { id: string; label: string; state: StepState; note: string }
 interface LogLine { t: number; level: 'info' | 'ok' | 'warn' | 'error' | 'out'; text: string }
 
-type Prompt =
+export type Prompt =
   | { kind: 'password'; title: string; body: ReactNode; placeholder: string; allowSkip: boolean; resolve: (v: string | null) => void }
   | { kind: 'token'; title: string; body: ReactNode; placeholder: string; link?: { href: string; label: string }; allowSkip: boolean; check?: TokenKind; resolve: (v: string | null) => void }
   | { kind: 'confirm'; title: string; body: ReactNode; yes: string; no: string; link?: { href: string; label: string }; resolve: (v: boolean) => void }
@@ -46,18 +46,18 @@ const STEPS: { id: string; label: string }[] = [
   { id: 'check', label: 'Final check' },
 ]
 
-class Cancelled extends Error {
+export class Cancelled extends Error {
   constructor() {
     super('Setup cancelled')
   }
 }
 
-const openUrl = (url: string) => {
+export const openUrl = (url: string) => {
   const b = window.NativeSsh
   if (b?.openUrl && b.openUrl(url)) return
   window.open(url, '_blank', 'noopener')
 }
-const copyText = async (text: string) => {
+export const copyText = async (text: string) => {
   const b = window.NativeSsh
   if (b?.copy && b.copy(text)) return true
   try {
@@ -522,7 +522,7 @@ export function SetupPage() {
   )
 }
 
-function StepIcon({ state }: { state: StepState }) {
+export function StepIcon({ state }: { state: StepState }) {
   if (state === 'running' || state === 'waiting') return <Loader2 size={15} className="spin" />
   if (state === 'ok') return <Check size={15} className="ok" />
   if (state === 'failed') return <X size={15} className="fail" />
@@ -530,7 +530,7 @@ function StepIcon({ state }: { state: StepState }) {
   return <Circle size={15} className="todo" />
 }
 
-function PromptCard({ prompt }: { prompt: Prompt }) {
+export function PromptCard({ prompt }: { prompt: Prompt }) {
   const [value, setValue] = useState('')
   const [copied, setCopied] = useState(false)
   useEffect(() => setValue(''), [prompt])

@@ -138,9 +138,10 @@ export const qs = (o: Record<string, string | number | undefined | null>) => {
 
 /* ---------- repository secrets (libsodium sealed boxes, as GitHub requires) ---------- */
 
-export async function sealForRepo(value: string, scope: 'actions' | 'dependabot' = 'actions'): Promise<{ encrypted_value: string; key_id: string }> {
+/** Seal a secret for the configured repository, or for `repoFull` (Owner/name) when given. */
+export async function sealForRepo(value: string, scope: 'actions' | 'dependabot' = 'actions', repoFull?: string): Promise<{ encrypted_value: string; key_id: string }> {
   await sodium.ready
-  const key = await gh<{ key_id: string; key: string }>('GET', repoPath(`/${scope}/secrets/public-key`))
+  const key = await gh<{ key_id: string; key: string }>('GET', repoFull ? `/repos/${repoFull}/${scope}/secrets/public-key` : repoPath(`/${scope}/secrets/public-key`))
   const sealed = sodium.crypto_box_seal(sodium.from_string(value), sodium.from_base64(key.key, sodium.base64_variants.ORIGINAL))
   return { encrypted_value: sodium.to_base64(sealed, sodium.base64_variants.ORIGINAL), key_id: key.key_id }
 }

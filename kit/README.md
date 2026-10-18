@@ -12,6 +12,20 @@ context they need from the first prompt.
 | `FIRST_SESSION.template.md` | The first prompt for the new repo's first session. Becomes `docs/FIRST_SESSION.md`. |
 | `../.claude/commands/new-project.md` | `/new-project` for a Claude Code session opened on xGallery. |
 
+## Way 0: the wizard (easiest, from the phone)
+
+xGallery's developer panel → Operations → **New project** (`/dev/new-project`). Type a name; the
+slug, domain and repository fill themselves in. Press **Build it** and it does everything below by
+itself: generates the copy, creates the repository, installs a deploy key of its own on the VPS and
+sets the secrets, adds the DNS records, gives the Claude GitHub app access so the repository shows
+up in Claude.ai, pushes `main`, waits for the site, pushes `panel`, waits for the panel, and shows
+the first-session prompt with an **Open Claude Code** button. It stops only when it needs you (the
+VPS password if the panel has no key, a click in GitHub if the token cannot add the repository to
+the Claude app, a DNS record to replace, a failed deploy to re-run). A stopped run resumes from the
+Projects list. The panel's GitHub token must be a classic token with `repo` and `workflow`.
+
+The two ways below do the same by hand.
+
 ## Before you start (only you can do these)
 
 1. Pick a **name**, a **domain** (for example `notes.amberxai.com`) and a **GitHub repo** name.

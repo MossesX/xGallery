@@ -25,6 +25,7 @@ import { vpsRouter } from './routes/vps.js'
 import { githubRouter, githubWebhookRouter } from './routes/github.js'
 import { startGithubPolling } from './github/snapshot.js'
 import { setupPublicRouter, setupRouter } from './routes/setup.js'
+import { newProjectRouter } from './routes/newproject.js'
 import { attachDev, sweepDevSessions } from './dev.js'
 import { adminRouter } from './routes/admin.js'
 
@@ -100,6 +101,7 @@ app.use('/api/dev/tasks', tasksRouter)
 app.use('/api/dev/vps', vpsRouter)
 app.use('/api/dev/github', githubRouter)
 app.use('/api/dev/setup', setupRouter)
+app.use('/api/dev/new-project', newProjectRouter)
 app.use('/api/setup', setupPublicRouter)
 app.use('/api/dev', devRouter)
 app.use('/api/themes', themesRouter)

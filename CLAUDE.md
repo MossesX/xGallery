@@ -23,6 +23,13 @@ and a small Android wrapper app for that panel.
 - **Starter kit (Oct 18):** `kit/` creates a new project from this repo (renamed copy that can
   share the VPS, its own CLAUDE.md, docs/ORIGIN.md and first-session prompt). Use `/new-project`
   or see `kit/README.md`. Keep `kit/CONTEXT.md` current when the architecture changes.
+- **New-project wizard (Oct 18):** developer panel → Operations → New project (`/dev/new-project`,
+  `server/src/routes/newproject.ts`) runs the kit end to end: clones the default branch, creates
+  the GitHub repo, installs a per-project deploy key on the VPS and sets its Actions secrets, adds
+  DNS, gives the Claude GitHub app access (so Claude.ai sees the repo), pushes `main`, waits for the
+  site, pushes `panel`, waits for the panel, then shows the first-session prompt. Progress is kept
+  in setting `devNewProjects` (no secrets) so a stopped run resumes. The panel's GitHub token needs
+  classic `repo` + `workflow` scopes.
 - **Next:** not recorded in the repo. Ask Brett, then write it here.
 - Note: `deploy/README.md` ends with an outdated line saying data lives in each browser's
   IndexedDB; the README "Storage model" (server + SQLite) is current. README's
