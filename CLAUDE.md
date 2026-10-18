@@ -16,6 +16,10 @@ and a small Android wrapper app for that panel.
 - **Recent (Oct 15–16):** developer panel split onto its own server/branch
   (`dev.xgallery.amberxai.com`), settings gear + menus, fly-out context menus, task-manager
   Panes sub-menu, assistant rejects mis-pasted subscription tokens.
+- **Recent (Oct 18):** Claude credential fields check format live (terminal pastes cleaned,
+  badge: Valid / Invalid link / Missing hyphens / Invalid format / Incomplete / wrong field,
+  Save greyed while invalid); eye reveals a field after the developer password; one-click setup
+  asks separately for the subscription token and the Anthropic API key.
 - **Next:** not recorded in the repo. Ask Brett, then write it here.
 - Note: `deploy/README.md` ends with an outdated line saying data lives in each browser's
   IndexedDB; the README "Storage model" (server + SQLite) is current. README's
@@ -51,7 +55,7 @@ npm run build          # tsc -b && vite build -> dist/
 npm run build:server   # server only -> server/dist
 ```
 
-- No automated tests. Seeded login on a fresh data dir: `admin` / `admin123`
+- No automated tests in the repo. Seeded owner on a fresh data dir: `brett` / `admin123`
   (`ADMIN_PASSWORD` overrides).
 - Android: `gradle -p android assembleDebug` (CI uses Gradle 8.9, JDK 17, no wrapper in repo).
 - CI / deploy:
