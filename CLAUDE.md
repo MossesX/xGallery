@@ -20,6 +20,9 @@ and a small Android wrapper app for that panel.
   badge: Valid / Invalid link / Missing hyphens / Invalid format / Incomplete / wrong field,
   Save greyed while invalid); eye reveals a field after the developer password; one-click setup
   asks separately for the subscription token and the Anthropic API key.
+- **Starter kit (Oct 18):** `kit/` creates a new project from this repo (renamed copy that can
+  share the VPS, its own CLAUDE.md, docs/ORIGIN.md and first-session prompt). Use `/new-project`
+  or see `kit/README.md`. Keep `kit/CONTEXT.md` current when the architecture changes.
 - **Next:** not recorded in the repo. Ask Brett, then write it here.
 - Note: `deploy/README.md` ends with an outdated line saying data lives in each browser's
   IndexedDB; the README "Storage model" (server + SQLite) is current. README's
@@ -37,6 +40,8 @@ server/src/         Express API: app.ts (routes, /healthz), db.ts (SQLite), auth
   ai/ github/ vps/  assistant (API + Claude Code CLI), GitHub poller, Hostinger + SSH
 android/            Kotlin WebView app for the panel (com.amberx.xgallery.devpanel)
 deploy/             deploy docs, Caddyfile, nginx.conf, hPanel compose, hostinger-setup.sh
+kit/                starter kit: new-project.mjs + context/instruction/prompt templates
+.claude/commands/   /new-project slash command (uses kit/)
 docker-compose.traefik.yml   production (Coolify Traefik); .panel.yml = panel container
 docker-compose.yml + .build.yml  standalone Caddy stack (fallback)
 Dockerfile          node:24-alpine, builds client + server, runs on :3000
