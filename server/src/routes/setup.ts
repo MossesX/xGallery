@@ -50,6 +50,8 @@ setupRouter.get(
       github: publicGithub().hasToken,
       githubRepo: publicGithub().full,
       claudeToken: ai.hasSubscriptionToken || ai.hasApiKey,
+      claudeSubscription: ai.hasSubscriptionToken,
+      anthropicApi: ai.hasApiKey,
       termuxKey: d.termuxKey ? { enrolledAt: d.termuxKey.at, installed: d.termuxKey.installed, fingerprint: d.termuxKey.pub.split(' ')[1]?.slice(-12) } : null,
       completedAt: d.completedAt,
       vps: null as unknown,

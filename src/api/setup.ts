@@ -31,6 +31,8 @@ export interface SetupStatus {
   github: boolean
   githubRepo: string
   claudeToken: boolean
+  claudeSubscription: boolean
+  anthropicApi: boolean
   termuxKey: { enrolledAt: number; installed: boolean; fingerprint: string } | null
   completedAt: number | null
   vps: VpsProbe | null

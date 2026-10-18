@@ -6,6 +6,7 @@ import { api } from '../../api/client'
 import { useAiSettings } from '../../api/hooks'
 import type { AiSettingsView } from '../../api/types'
 import { useUI } from '../../store/ui'
+import { TokenField, tokenBlocks } from '../../components/TokenField'
 
 type Draft = Pick<AiSettingsView, 'enabled' | 'model' | 'allowCodeChanges' | 'extraInstructions' | 'assistantName'> & { subscriptionToken: string; apiKey: string }
 
@@ -23,16 +24,26 @@ export function AssistantSettingsPage() {
   const { data } = useAiSettings()
   const [draft, setDraft] = useState<Draft | null>(null)
   const [testing, setTesting] = useState<'both' | 'subscription' | 'api' | null>(null)
+  // The eye on the credential fields: unlocked once per visit with the developer password, which also brings back the saved values.
+  const [unlocked, setUnlocked] = useState(false)
+  const [saved, setSaved] = useState<{ subscription: string; api: string }>({ subscription: '', api: '' })
+  const unlock = async (devPassword: string) => {
+    const r = await api.post<{ subscriptionToken?: string; apiKey?: string }>('/api/ai/settings/reveal', { which: 'both', devPassword })
+    setSaved({ subscription: r.subscriptionToken ?? '', api: r.apiKey ?? '' })
+    setUnlocked(true)
+  }
   useEffect(() => {
     if (data && !draft) setDraft({ enabled: data.settings.enabled, model: data.settings.model, allowCodeChanges: data.settings.allowCodeChanges, extraInstructions: data.settings.extraInstructions, assistantName: data.settings.assistantName, subscriptionToken: '', apiKey: '' })
   }, [data, draft])
 
   const save = useMutation({
     mutationFn: (patch: Partial<Draft> & { clearSubscriptionToken?: boolean; clearApiKey?: boolean }) => api.put<{ settings: AiSettingsView }>('/api/ai/settings', patch),
-    onSuccess: () => {
+    onSuccess: (_r, v) => {
       qc.invalidateQueries({ queryKey: ['ai-settings'] })
       qc.invalidateQueries({ queryKey: ['ai-status'] })
       setDraft((d) => (d ? { ...d, subscriptionToken: '', apiKey: '' } : d))
+      // Keep what the eye can show in step with what was just stored.
+      setSaved((sv) => ({ subscription: v.clearSubscriptionToken ? '' : (v.subscriptionToken ?? sv.subscription), api: v.clearApiKey ? '' : (v.apiKey ?? sv.api) }))
       notify('Assistant settings saved', 'success')
     },
     onError: (e: Error) => notify(e.message, 'error'),
@@ -147,8 +158,8 @@ export function AssistantSettingsPage() {
               <KeyRound size={15} /> Credentials
             </h3>
             <div className="field">
-              <label>Claude subscription token</label>
-              <input className="input" type="password" autoComplete="off" value={draft.subscriptionToken} onChange={(e) => setDraft({ ...draft, subscriptionToken: e.target.value })} placeholder={s.hasSubscriptionToken ? 'Paste a new token to replace it' : 'sk-ant-oat01-…'} />
+              <label htmlFor="ai-sub-token">Claude subscription token</label>
+              <TokenField kind="subscription" id="ai-sub-token" label="Claude subscription token" value={draft.subscriptionToken} onChange={(v) => setDraft({ ...draft, subscriptionToken: v })} placeholder={s.hasSubscriptionToken ? 'Saved · paste a new token to replace it' : 'sk-ant-oat01-…'} gate={{ unlocked, unlock }} saved={saved.subscription || null} testId="subscription" />
               <details className="setup-steps">
                 <summary className="muted small">How to get the token</summary>
                 <ol className="small">
@@ -156,12 +167,10 @@ export function AssistantSettingsPage() {
                     On your own computer install Claude Code: <code>npm install -g @anthropic-ai/claude-code</code>
                   </li>
                   <li>
-                    Sign in to your Claude subscription: <code>claude login</code>
+                    Run <code>claude setup-token</code> and open the whole sign-in link it prints (it ends with <code>state=…</code>).
                   </li>
-                  <li>
-                    Create a long-lived token: <code>claude setup-token</code>
-                  </li>
-                  <li>Paste the token here, save, then press Verify. The token is stored on the server and never shown again.</li>
+                  <li>Approve in the browser, then paste the code it shows back into that terminal. Only then does it print the token.</li>
+                  <li>Copy the token (it starts with <code>sk-ant-oat01-</code>) and paste it here. Line breaks and spaces from the terminal are removed automatically; the badge must read "Valid format" before you can save.</li>
                 </ol>
                 <p className="muted small" style={{ margin: 0 }}>
                   Alternative: set <code>CLAUDE_CODE_OAUTH_TOKEN</code> in the container environment; a saved token here takes precedence.
@@ -169,16 +178,24 @@ export function AssistantSettingsPage() {
               </details>
             </div>
             <div className="field">
-              <label>Anthropic API key (backup)</label>
-              <input className="input" type="password" autoComplete="off" value={draft.apiKey} onChange={(e) => setDraft({ ...draft, apiKey: e.target.value })} placeholder={s.hasApiKey ? 'Paste a new key to replace it' : 'sk-ant-api03-…'} />
+              <label htmlFor="ai-api-key">Anthropic API key (backup)</label>
+              <TokenField kind="api" id="ai-api-key" label="Anthropic API key" value={draft.apiKey} onChange={(v) => setDraft({ ...draft, apiKey: v })} placeholder={s.hasApiKey ? 'Saved · paste a new key to replace it' : 'sk-ant-api03-…'} gate={{ unlocked, unlock }} saved={saved.api || null} testId="api" />
               <p className="muted small" style={{ margin: '6px 0 0' }}>
                 From console.anthropic.com → API keys. Alternative: set <code>ANTHROPIC_API_KEY</code> in the container environment.
               </p>
             </div>
             <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-              <button className="btn primary" onClick={() => save.mutate({ subscriptionToken: draft.subscriptionToken || undefined, apiKey: draft.apiKey || undefined })} disabled={save.isPending || (!draft.subscriptionToken && !draft.apiKey)}>
-                Save credentials
-              </button>
+              {(() => {
+                const newSub = draft.subscriptionToken && draft.subscriptionToken !== saved.subscription ? draft.subscriptionToken : undefined
+                const newApi = draft.apiKey && draft.apiKey !== saved.api ? draft.apiKey : undefined
+                const invalid = tokenBlocks('subscription', draft.subscriptionToken) || tokenBlocks('api', draft.apiKey)
+                const why = invalid ? 'Fix the field marked in red first' : !newSub && !newApi ? 'Paste a new token or key first' : ''
+                return (
+                  <button className="btn primary" onClick={() => save.mutate({ subscriptionToken: newSub, apiKey: newApi })} disabled={save.isPending || invalid || (!newSub && !newApi)} title={why} data-ai-save-credentials="">
+                    Save credentials
+                  </button>
+                )
+              })()}
               {s.sources.subscription === 'settings' && (
                 <button className="btn ghost sm" onClick={() => save.mutate({ clearSubscriptionToken: true })}>
                   Remove token

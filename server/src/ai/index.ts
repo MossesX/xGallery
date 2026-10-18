@@ -3,6 +3,7 @@ import { logActivity } from '../activity.js'
 import type { User } from '../auth.js'
 import { cliAvailable, runCli } from './cli.js'
 import { HttpError } from '../util.js'
+import { normalizeToken, tokenProblem } from './tokens.js'
 import { runApi } from './api.js'
 import { codebaseOverview, ensureWorkspace, SOURCE_DIR, sourceVersion } from './workspace.js'
 import { DEFAULT_AI, type AiSettings, type RunResult, type StreamEvent } from './types.js'
@@ -72,17 +73,19 @@ export function saveAiSettings(patch: Partial<AiSettings> & { clearSubscriptionT
   if (typeof patch.extraInstructions === 'string') next.extraInstructions = patch.extraInstructions.slice(0, 8000)
   if (typeof patch.assistantName === 'string' && patch.assistantName.trim()) next.assistantName = patch.assistantName.trim().slice(0, 40)
   if (typeof patch.subscriptionToken === 'string' && patch.subscriptionToken && patch.subscriptionToken !== MASK) {
-    const tok = patch.subscriptionToken.trim()
-    // Catch the usual mix-ups before they fail silently at test time.
-    if (/^sk-ant-api/.test(tok)) throw new HttpError(400, 'That is an Anthropic API key (sk-ant-api…): paste it in the API key field, not the subscription token field')
-    if (tok.includes('#') || (tok.length < 60 && !tok.startsWith('sk-ant-'))) throw new HttpError(400, 'That looks like the sign-in code from the browser, not the token. Paste that code back into the terminal running "claude setup-token"; it then prints the real token, which starts with sk-ant-oat01- and is what goes here')
-    if (!tok.startsWith('sk-ant-oat')) throw new HttpError(400, 'A Claude Code subscription token starts with sk-ant-oat01-. Run "claude setup-token" on a machine with your Claude subscription and paste the whole token it prints')
+    // Terminal pastes arrive wrapped and indented: clean first, then insist on the real shape.
+    const tok = normalizeToken(patch.subscriptionToken)
+    const problem = tokenProblem('subscription', tok)
+    if (problem) throw new HttpError(400, problem)
     next.subscriptionToken = tok
     next.subscriptionVerifiedAt = null
     next.subscriptionVerifiedDetail = ''
   }
   if (typeof patch.apiKey === 'string' && patch.apiKey && patch.apiKey !== MASK) {
-    next.apiKey = patch.apiKey.trim()
+    const key = normalizeToken(patch.apiKey)
+    const problem = tokenProblem('api', key)
+    if (problem) throw new HttpError(400, problem)
+    next.apiKey = key
     next.apiVerifiedAt = null
     next.apiVerifiedDetail = ''
   }

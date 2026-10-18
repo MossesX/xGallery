@@ -2004,3 +2004,21 @@ button.link { background: none; border: 0; padding: 0; color: var(--c-primary); 
 }
 .ctx-item .mark-on { color: var(--c-success, #16a34a); }
 .ctx-item .mark-off { color: var(--c-text-muted); }
+
+/* ---------- credential fields: live format badge + eye ---------- */
+.token-field { display: flex; flex-direction: column; gap: 4px; }
+.token-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.token-row .token-input { flex: 1 1 220px; min-width: 0; }
+.token-input.bad { border-color: #dc2626; box-shadow: 0 0 0 2px color-mix(in srgb, #dc2626 16%, transparent); }
+.token-input.ok { border-color: var(--c-success, #16a34a); }
+.token-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 999px; font-size: 0.74rem; font-weight: 700; white-space: nowrap; }
+.token-badge.ok { background: color-mix(in srgb, var(--c-success, #16a34a) 14%, transparent); color: var(--c-success, #16a34a); }
+.token-badge.bad { background: color-mix(in srgb, #dc2626 12%, transparent); color: #dc2626; }
+.token-hint { color: var(--c-text-muted); }
+.token-hint.bad { color: #dc2626; }
+.token-eye-locked { position: relative; display: inline-flex; }
+.token-eye-locked svg:last-child { position: absolute; right: -5px; bottom: -4px; }
+.token-gate { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 6px 8px; border-radius: 8px; background: var(--c-surface-hover); }
+.token-gate .input { width: 200px; }
+.token-gate-err { color: #dc2626; }
+.btn:disabled, .btn[disabled] { opacity: 0.45; cursor: not-allowed; filter: grayscale(0.6); }

@@ -6,6 +6,8 @@ import { api, ApiError } from '../../../api/client'
 import { useOps } from '../../../api/ops'
 import { phonePublicKey, setupApi, useSetupStatus, type SetupStatus } from '../../../api/setup'
 import { nativeAvailable } from '../../../terminal/transport'
+import { TokenField } from '../../../components/TokenField'
+import { checkToken, type TokenKind } from '../../../lib/tokenFormat'
 import { useUI } from '../../../store/ui'
 
 /**
@@ -23,11 +25,11 @@ interface LogLine { t: number; level: 'info' | 'ok' | 'warn' | 'error' | 'out'; 
 
 type Prompt =
   | { kind: 'password'; title: string; body: ReactNode; placeholder: string; allowSkip: boolean; resolve: (v: string | null) => void }
-  | { kind: 'token'; title: string; body: ReactNode; placeholder: string; link?: { href: string; label: string }; allowSkip: boolean; resolve: (v: string | null) => void }
+  | { kind: 'token'; title: string; body: ReactNode; placeholder: string; link?: { href: string; label: string }; allowSkip: boolean; check?: TokenKind; resolve: (v: string | null) => void }
   | { kind: 'confirm'; title: string; body: ReactNode; yes: string; no: string; link?: { href: string; label: string }; resolve: (v: boolean) => void }
   | { kind: 'wait'; title: string; body: ReactNode; script?: string; resolve: (v: 'skip' | 'cancel') => void }
 
-interface Options { claudeCli: boolean; termux: boolean; hostinger: boolean; github: boolean; claudeToken: boolean }
+interface Options { claudeCli: boolean; termux: boolean; hostinger: boolean; github: boolean; claudeSubscription: boolean; anthropicApi: boolean }
 
 const STEPS: { id: string; label: string }[] = [
   { id: 'panel-key', label: 'Panel SSH key' },
@@ -39,7 +41,8 @@ const STEPS: { id: string; label: string }[] = [
   { id: 'termux', label: 'Termux on this phone (mosh client)' },
   { id: 'hostinger', label: 'Hostinger API token + VM' },
   { id: 'github', label: 'GitHub token + webhook' },
-  { id: 'claude-token', label: 'Claude token for the assistant' },
+  { id: 'claude-subscription', label: 'Claude subscription token (assistant)' },
+  { id: 'anthropic-api', label: 'Anthropic API key (assistant backup)' },
   { id: 'check', label: 'Final check' },
 ]
 
@@ -85,7 +88,7 @@ export function SetupPage() {
     setPromptState(p)
   }
   const closePrompt = () => setPrompt(null)
-  const [opts, setOpts] = useState<Options>({ claudeCli: true, termux: nativeAvailable(), hostinger: true, github: true, claudeToken: true })
+  const [opts, setOpts] = useState<Options>({ claudeCli: true, termux: nativeAvailable(), hostinger: true, github: true, claudeSubscription: true, anthropicApi: true })
   const optsTouched = useRef(false)
   const cancelRef = useRef(false)
   const autoStarted = useRef(false)
@@ -95,7 +98,7 @@ export function SetupPage() {
   useEffect(() => {
     const s = status.data
     if (!s || optsTouched.current) return
-    setOpts({ claudeCli: !(s.vps?.claude ?? false), termux: nativeAvailable() && !(s.termuxKey?.installed ?? false), hostinger: !s.hostinger, github: !s.github, claudeToken: !s.claudeToken })
+    setOpts({ claudeCli: !(s.vps?.claude ?? false), termux: nativeAvailable() && !(s.termuxKey?.installed ?? false), hostinger: !s.hostinger, github: !s.github, claudeSubscription: !s.claudeSubscription, anthropicApi: !s.anthropicApi })
   }, [status.data])
   useEffect(() => {
     logEnd.current?.scrollIntoView({ block: 'nearest' })
@@ -342,21 +345,39 @@ export function SetupPage() {
           return { state: 'failed', note: `token set, but the webhook could not be installed: ${(e as Error).message}` }
         }
       })
-      await step('claude-token', async () => {
-        if (s.claudeToken) return { note: 'already set' }
-        if (!opts.claudeToken) return { state: 'skipped', note: 'unticked' }
+      await step('claude-subscription', async () => {
+        if (s.claudeSubscription) return { note: 'already set' }
+        if (!opts.claudeSubscription) return { state: 'skipped', note: 'unticked' }
         const token = await ask<string | null>((resolve) => ({
           kind: 'token',
-          title: 'Claude token for the panel assistant',
-          body: <>Optional. A Claude Code OAuth token (run <span className="mono">claude setup-token</span> on any machine with a subscription) or an Anthropic API key (<span className="mono">sk-ant-api…</span>). Powers the Developer AI page and the site assistant. The sign-in link that <span className="mono">claude setup-token</span> prints is long and wraps: copy it whole (it ends with <span className="mono">state=…</span>), or a "Missing state parameter" page appears. Easiest on a computer; the token it prints then works from every device.</>,
-          placeholder: 'sk-ant-oat… or sk-ant-api…',
-          link: { href: 'https://console.anthropic.com/settings/keys', label: 'Anthropic console' },
+          title: 'Claude subscription token',
+          body: <>The assistant's main connection: turns run on your Claude plan through Claude Code, no API charges. On any machine with your subscription run <span className="mono">claude setup-token</span>, open the whole sign-in link it prints (it ends with <span className="mono">state=…</span>), approve, paste the code back into that terminal, then copy the <span className="mono">sk-ant-oat01-…</span> token it prints. Line breaks from the terminal are removed for you; Continue unlocks once the badge reads "Valid format".</>,
+          placeholder: 'sk-ant-oat01-…',
+          link: { href: 'https://claude.ai/settings', label: 'Claude account' },
           allowSkip: true,
+          check: 'subscription',
           resolve,
         }))
         if (!token) return { state: 'skipped', note: 'no token given' }
-        await api.put('/api/ai/settings', token.startsWith('sk-ant-api') ? { apiKey: token } : { subscriptionToken: token })
-        return { note: token.startsWith('sk-ant-api') ? 'API key saved' : 'subscription token saved' }
+        await api.put('/api/ai/settings', { subscriptionToken: token })
+        return { note: 'subscription token saved' }
+      })
+      await step('anthropic-api', async () => {
+        if (s.anthropicApi) return { note: 'already set' }
+        if (!opts.anthropicApi) return { state: 'skipped', note: 'unticked' }
+        const key = await ask<string | null>((resolve) => ({
+          kind: 'token',
+          title: 'Anthropic API key',
+          body: <>The backup connection, used when the subscription is unavailable or rate-limited (billed per use on your Anthropic console account). Create a key at console.anthropic.com → API keys and paste it; it starts with <span className="mono">sk-ant-api03-</span>.</>,
+          placeholder: 'sk-ant-api03-…',
+          link: { href: 'https://console.anthropic.com/settings/keys', label: 'Anthropic console' },
+          allowSkip: true,
+          check: 'api',
+          resolve,
+        }))
+        if (!key) return { state: 'skipped', note: 'no key given' }
+        await api.put('/api/ai/settings', { apiKey: key })
+        return { note: 'API key saved' }
       })
       await step('check', async () => {
         const r = await setupApi.run({ step: 'check', profile: profile.id, timeout: 60 })
@@ -458,7 +479,8 @@ export function SetupPage() {
             <label className="checkbox small"><input type="checkbox" checked={opts.termux} onChange={() => toggle('termux')} disabled={running || !nativeAvailable()} /> Set up Termux on this phone (mosh client)</label>
             <label className="checkbox small"><input type="checkbox" checked={opts.hostinger} onChange={() => toggle('hostinger')} disabled={running} /> Hostinger API token (asks for it)</label>
             <label className="checkbox small"><input type="checkbox" checked={opts.github} onChange={() => toggle('github')} disabled={running} /> GitHub token + webhook (asks for it)</label>
-            <label className="checkbox small"><input type="checkbox" checked={opts.claudeToken} onChange={() => toggle('claudeToken')} disabled={running} /> Claude token for the assistant (asks for it)</label>
+            <label className="checkbox small"><input type="checkbox" checked={opts.claudeSubscription} onChange={() => toggle('claudeSubscription')} disabled={running} /> Claude subscription token for the assistant (asks for it)</label>
+            <label className="checkbox small"><input type="checkbox" checked={opts.anthropicApi} onChange={() => toggle('anthropicApi')} disabled={running} /> Anthropic API key as the assistant's backup (asks for it)</label>
           </div>
         </section>
 
@@ -524,7 +546,23 @@ function PromptCard({ prompt }: { prompt: Prompt }) {
       </div>
       <h3 style={{ margin: 0 }}>{prompt.title}</h3>
       <p className="muted small" style={{ margin: 0 }}>{prompt.body}</p>
-      {(prompt.kind === 'password' || prompt.kind === 'token') && (
+      {prompt.kind === 'token' && prompt.check && (
+        <form className="stack" style={{ gap: 8 }} onSubmit={(e) => { e.preventDefault(); if (checkToken(prompt.check!, value).state === 'ok') prompt.resolve(value) }} data-setup-token-form={prompt.check}>
+          <TokenField kind={prompt.check} value={value} onChange={setValue} placeholder={prompt.placeholder} label={prompt.title} autoFocus testId={`setup-${prompt.check}`} />
+          <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+            <button className="btn primary sm" disabled={checkToken(prompt.check, value).state !== 'ok'} title={checkToken(prompt.check, value).state === 'bad' ? 'Fix the format first' : ''} data-setup-submit="">
+              <ChevronRight size={13} /> Continue
+            </button>
+            {link}
+            {prompt.allowSkip && (
+              <button type="button" className="btn ghost sm" onClick={() => prompt.resolve(null)} data-setup-skip="">
+                Skip
+              </button>
+            )}
+          </div>
+        </form>
+      )}
+      {(prompt.kind === 'password' || (prompt.kind === 'token' && !prompt.check)) && (
         <form className="row" style={{ gap: 6, flexWrap: 'wrap' }} onSubmit={(e) => { e.preventDefault(); if (value.trim()) prompt.resolve(value.trim()) }}>
           <input className="input sm grow mono" type="password" autoComplete="off" value={value} onChange={(e) => setValue(e.target.value)} placeholder={prompt.placeholder} aria-label={prompt.title} autoFocus data-setup-input="" />
           <button className="btn primary sm" disabled={!value.trim()} data-setup-submit="">
@@ -592,7 +630,8 @@ function summarise(s: SetupStatus): { key: string; label: string; ok: boolean; n
     { key: 'termux', label: 'Termux key on the VPS', ok: !!s.termuxKey?.installed, note: s.termuxKey ? `…${s.termuxKey.fingerprint}${s.termuxKey.installed ? '' : ' (not installed yet)'}` : inApp ? 'not enrolled' : 'open in the app' },
     { key: 'hostinger', label: 'Hostinger API', ok: s.hostinger, note: s.hostinger ? (s.hostingerVm ? 'token + VM' : 'token, no VM picked') : 'no token' },
     { key: 'github', label: 'GitHub manager', ok: s.github, note: s.github ? s.githubRepo : 'no token' },
-    { key: 'claude-token', label: 'Claude token (assistant)', ok: s.claudeToken, note: s.claudeToken ? '' : 'optional' },
+    { key: 'claude-subscription', label: 'Claude subscription token (assistant)', ok: s.claudeSubscription, note: s.claudeSubscription ? '' : 'optional' },
+    { key: 'anthropic-api', label: 'Anthropic API key (assistant backup)', ok: s.anthropicApi, note: s.anthropicApi ? '' : 'optional' },
   ]
 }
 
@@ -616,7 +655,7 @@ export function AutoSetupSwitch({ hidden }: { hidden?: boolean }) {
   if (hidden || !status.data) return null
   const s = status.data
   const list = summarise(s)
-  const missing = list.filter((c) => !c.ok && !(c.key === 'claude-token') && !(!nativeAvailable() && (c.key === 'phone' || c.key === 'termux')))
+  const missing = list.filter((c) => !c.ok && c.key !== 'claude-subscription' && c.key !== 'anthropic-api' && !(!nativeAvailable() && (c.key === 'phone' || c.key === 'termux')))
   const complete = !!s.completedAt && missing.length === 0
   const stamp = `${s.completedAt ?? 0}:${missing.length}`
   if (dismissed === stamp) return null

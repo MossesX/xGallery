@@ -1,12 +1,13 @@
 import { Router, type Request, type Response, type NextFunction } from 'express'
 import Anthropic from '@anthropic-ai/sdk'
 import { db, now } from '../db.js'
-import { requireOwner, requireUser } from '../auth.js'
+import { loginFailed, loginSucceeded, loginThrottle, requireOwner, requireUser } from '../auth.js'
 import { HttpError, str, wrap, IdRow } from '../util.js'
 import { aiStatus, assistantTurn, getAiSettings, publicAiSettings, recordVerification, saveAiSettings, type PageContext } from '../ai/index.js'
 import { cliAvailable, pingCli } from '../ai/cli.js'
 import { ensureWorkspace, resetWorkspace, sourceVersion, workspaceDiff } from '../ai/workspace.js'
-import { requireDev } from '../dev.js'
+import { devPasswordSet, requireDev, verifyDevPassword } from '../dev.js'
+import { logActivity } from '../activity.js'
 
 export const aiRouter = Router()
 
@@ -39,6 +40,36 @@ aiRouter.put(
   wrap((req, res) => {
     saveAiSettings(req.body ?? {})
     res.json({ settings: publicAiSettings() })
+  }),
+)
+
+/**
+ * Show a saved credential to the owner (the eye on the credentials form). Needs the developer
+ * password, is throttled like a sign-in, never works inside a temporary owner's sandbox, and is logged.
+ */
+aiRouter.post(
+  '/settings/reveal',
+  requireOwner,
+  wrap((req, res) => {
+    if (req.sandbox) throw new HttpError(403, 'Saved credentials are not shown inside a sandbox')
+    const which = str(req.body?.which, 20)
+    const password = typeof req.body?.devPassword === 'string' ? req.body.devPassword : ''
+    if (!devPasswordSet()) throw new HttpError(400, 'Set a developer password first (developer panel), then use it here to show saved keys')
+    const key = `reveal:${req.user!.id}`
+    try {
+      loginThrottle(key, 5)
+    } catch (e) {
+      throw new HttpError(429, (e as Error).message)
+    }
+    if (!verifyDevPassword(password)) {
+      loginFailed(key)
+      logActivity({ userId: req.user!.id, kind: 'security.reveal_failed', targetLabel: which, ip: req.ip ?? '' })
+      throw new HttpError(401, 'Wrong developer password')
+    }
+    loginSucceeded(key)
+    const s = getAiSettings()
+    logActivity({ userId: req.user!.id, kind: 'security.credential_revealed', targetLabel: which || 'check', ip: req.ip ?? '' })
+    res.json({ ok: true, subscriptionToken: which === 'subscription' || which === 'both' ? s.subscriptionToken : undefined, apiKey: which === 'api' || which === 'both' ? s.apiKey : undefined })
   }),
 )
 

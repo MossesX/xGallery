@@ -90,6 +90,18 @@ site. Members sign in to browse, like and comment.
   on phones the whole panel menu becomes one "Go to…" combo. The site banner folds its navigation and
   toolbar into a sectioned menu (Go to / Tools / Account) on narrow screens.
 
+**Claude credentials (assistant)**
+- The subscription token and Anthropic API key fields check their format on every keystroke and
+  paste. Line breaks, indentation, quotes and an `export …=` prefix from a terminal are removed as you
+  go; a badge beside the field reads "Valid format" or says what is wrong (Invalid link, Missing
+  hyphens, Invalid format, Incomplete, or a key in the wrong field), and Save stays grey until every
+  filled field is valid. The server applies the same rules before storing.
+- The eye beside each field shows its value after the developer password is confirmed (once per
+  visit), including the value already saved. Wrong passwords are throttled and every reveal is logged;
+  it never works inside a temporary owner's sandbox.
+- The one-click setup asks separately for the subscription token and the API key, with the same
+  live check.
+
 **Temporary owner (sandbox)**
 - A member can be given the *Temporary owner* role (Owner console → Members). They get the full
   owner console and every owner power, but inside a private copy of the site: the first request
