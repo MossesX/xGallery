@@ -1,6 +1,6 @@
 import { Link, Navigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Globe } from 'lucide-react'
-import { useGallery } from '../api/hooks'
+import { ArrowLeft, Globe, Share2 } from 'lucide-react'
+import { useCreateGalleryLink, useGallery } from '../api/hooks'
 import { AlbumCard } from '../components/AlbumCard'
 import { PageLoader } from '../components/Skeleton'
 import { useGalleryTheme } from '../components/GalleryTheme'
@@ -12,6 +12,7 @@ export function GalleryPage() {
   const { slug } = useParams()
   const { data, isLoading, error } = useGallery(slug)
   const notify = useUI((s) => s.notify)
+  const createLink = useCreateGalleryLink()
   useGalleryTheme(data?.theme)
 
   if (isLoading) return <PageLoader />
@@ -22,12 +23,17 @@ export function GalleryPage() {
   const publicUrl = `${location.origin}/public/${gallery.slug}`
 
   return (
-    <main className="page">
+    <main className="page" data-gallery-id={gallery.id} data-gallery-slug={gallery.slug} data-gallery-title={gallery.title} data-gallery-manage={data.canManage ? '1' : '0'}>
       <div className="row between" style={{ marginBottom: 'calc(var(--space) * 2)' }}>
         <Link to="/" className="btn ghost sm">
           <ArrowLeft size={14} /> All galleries
         </Link>
         <div className="row">
+          {data.canManage && (
+            <button className="btn sm" onClick={() => createLink.mutate({ galleryId: gallery.id }, { onSuccess: (l) => notify(`Gallery link copied: ${l.fullUrl}`, 'success'), onError: (e: Error) => notify(e.message, 'error') })} disabled={createLink.isPending} title="Create a private link anyone can open to see this gallery's albums" data-gallery-link="">
+              <Share2 size={14} /> Gallery link
+            </button>
+          )}
           {gallery.publicAlbum && (
             <button className="btn sm" onClick={() => navigator.clipboard.writeText(publicUrl).then(() => notify('Public link copied', 'success'))}>
               <Globe size={14} /> Public page

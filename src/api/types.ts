@@ -479,6 +479,20 @@ export interface InboxItem {
 export interface AlbumLink {
   id: number
   albumId: number
+  /** Set when the link opens one photo or video instead of the whole album. */
+  mediaId: number | null
+  token: string
+  label: string
+  url: string
+  createdBy: number | null
+  createdAt: number
+  views: number
+  revokedAt: number | null
+}
+
+export interface GalleryLink {
+  id: number
+  galleryId: number
   token: string
   label: string
   url: string

@@ -223,18 +223,23 @@ albumsRouter.post(
 
 /* ---------- private links: unlimited, each unique, revocable ---------- */
 
-type LinkRow = IdRow & { album_id: number; token: string; label: string; created_by: number | null; created_at: number; views: number; revoked_at: number | null }
+type LinkRow = IdRow & { album_id: number; media_id: number | null; token: string; label: string; created_by: number | null; created_at: number; views: number; revoked_at: number | null }
 
 function linkJson(l: LinkRow) {
-  return { id: l.id, albumId: l.album_id, token: l.token, label: l.label, url: `/s/${l.token}`, createdBy: l.created_by, createdAt: l.created_at, views: l.views, revokedAt: l.revoked_at ?? null }
+  return { id: l.id, albumId: l.album_id, mediaId: l.media_id ?? null, token: l.token, label: l.label, url: `/s/${l.token}`, createdBy: l.created_by, createdAt: l.created_at, views: l.views, revokedAt: l.revoked_at ?? null }
 }
 
 /** Every call mints a brand-new token, even when the album already has links. */
-function createLink(albumId: number, userId: number, label: string): LinkRow {
+export function newShareToken(): string {
   let token = ''
   do token = randomBytes(15).toString('base64url')
-  while (db.prepare('SELECT 1 FROM album_links WHERE token = ?').get(token) || db.prepare('SELECT 1 FROM albums WHERE share_token = ?').get(token))
-  const info = db.prepare('INSERT INTO album_links(album_id, token, label, created_by, created_at) VALUES (?, ?, ?, ?, ?)').run(albumId, token, label, userId, now())
+  while (db.prepare('SELECT 1 FROM album_links WHERE token = ?').get(token) || db.prepare('SELECT 1 FROM gallery_links WHERE token = ?').get(token) || db.prepare('SELECT 1 FROM albums WHERE share_token = ?').get(token))
+  return token
+}
+
+function createLink(albumId: number, userId: number, label: string, mediaId: number | null = null): LinkRow {
+  const token = newShareToken()
+  const info = db.prepare('INSERT INTO album_links(album_id, media_id, token, label, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(albumId, mediaId, token, label, userId, now())
   return db.prepare('SELECT * FROM album_links WHERE id = ?').get(info.lastInsertRowid as number) as LinkRow
 }
 
@@ -256,8 +261,11 @@ albumsRouter.post(
     if (!req.user!.perms.canShareLinks) throw new HttpError(403, 'Your account is not allowed to create private links. Ask the owner.')
     const maxLinks = req.user!.limits.maxPrivateLinks
     if (maxLinks > 0 && (db.prepare('SELECT COUNT(*) c FROM album_links WHERE album_id = ? AND revoked_at IS NULL').get(id) as { c: number }).c >= maxLinks) throw new HttpError(403, `This album may have ${maxLinks} active private links.`)
-    const link = createLink(id, req.user!.id, str(req.body?.label, 80))
-    track(req, 'album.link_create', { targetType: 'album', targetId: id, detail: { label: link.label } })
+    // An item link opens one photo or video inside xGallery's viewer; it must belong to this album.
+    const mediaId = req.body?.mediaId != null ? Number(req.body.mediaId) : null
+    if (mediaId != null && !db.prepare('SELECT 1 FROM media WHERE id = ? AND album_id = ?').get(mediaId, id)) throw new HttpError(404, 'That item is not in this album')
+    const link = createLink(id, req.user!.id, str(req.body?.label, 80), mediaId)
+    track(req, mediaId ? 'media.link_create' : 'album.link_create', { targetType: mediaId ? 'media' : 'album', targetId: mediaId ?? id, detail: { label: link.label } })
     res.status(201).json({ link: linkJson(link) })
   }),
 )
@@ -275,10 +283,46 @@ albumsRouter.delete(
 )
 
 /** Resolve a share token to its album: a live private link, or the legacy single token. */
-export function albumForToken(token: string): IdRow | undefined {
+export function albumForToken(token: string, gallerySlugAlbum?: string): IdRow | undefined {
+  const hit = resolveAlbumToken(token)?.album
+  if (hit || !gallerySlugAlbum) return hit
+  // A gallery link reaches each of the gallery's albums by slug.
+  const gl = db.prepare('SELECT gallery_id FROM gallery_links WHERE token = ? AND revoked_at IS NULL').get(token) as { gallery_id: number } | undefined
+  return gl ? galleryLinkAlbums(gl.gallery_id).find((a) => a.slug === gallerySlugAlbum) : undefined
+}
+
+/** A live album or item link (or the legacy album token): the album, plus the one item an item link points at. */
+function resolveAlbumToken(token: string): { album: IdRow; mediaId: number | null } | undefined {
   const link = db.prepare('SELECT * FROM album_links WHERE token = ? AND revoked_at IS NULL').get(token) as LinkRow | undefined
-  if (link) return db.prepare('SELECT * FROM albums WHERE id = ?').get(link.album_id) as IdRow | undefined
-  return db.prepare('SELECT * FROM albums WHERE share_token = ?').get(token) as IdRow | undefined
+  if (link) {
+    const album = db.prepare('SELECT * FROM albums WHERE id = ?').get(link.album_id) as IdRow | undefined
+    return album ? { album, mediaId: link.media_id ?? null } : undefined
+  }
+  const album = db.prepare('SELECT * FROM albums WHERE share_token = ?').get(token) as IdRow | undefined
+  return album ? { album, mediaId: null } : undefined
+}
+
+type GalleryLinkRow = IdRow & { gallery_id: number; token: string; label: string; created_by: number | null; created_at: number; views: number; revoked_at: number | null }
+
+/** Albums a gallery link opens: the gallery's published and public albums (PIN albums keep their PIN). */
+function galleryLinkAlbums(galleryId: number): IdRow[] {
+  return db.prepare("SELECT * FROM albums WHERE gallery_id = ? AND visibility IN ('published', 'public', 'shared') ORDER BY featured DESC, sort_order, created_at").all(galleryId) as IdRow[]
+}
+
+function withToken<T extends { url: string; thumbUrl: string | null }>(j: T, token: string): T {
+  return { ...j, url: `${j.url}?s=${token}`, thumbUrl: j.thumbUrl ? `${j.thumbUrl}?s=${token}` : null }
+}
+
+function sendAlbum(req: import('express').Request, res: import('express').Response, row: IdRow, token: string, mediaId: number | null, gallery?: { title: string; slug: string; token: string }) {
+  if (row.visibility === 'shared' && !hasPinAccess(req, row.id as number) && !(req.user && canManageGallery(req.user, row.gallery_id as number))) {
+    // Locked: only the title, the blurred snapshot and the PIN prompt; media stays hidden.
+    res.json({ locked: true, album: { id: row.id, title: row.title, description: row.description, slug: row.slug }, snapshotUrl: row.lock_snapshot ? `/api/share/${token}/snapshot${gallery ? `?album=${encodeURIComponent(String(row.slug))}` : ''}` : null, gallery })
+    return
+  }
+  logActivity({ userId: req.user?.id ?? null, kind: mediaId ? 'media.link_view' : 'album.link_view', targetType: mediaId ? 'media' : 'album', targetId: mediaId ?? (row.id as number), targetLabel: String(row.title ?? ''), ip: req.ip ?? '', detail: { token: token.slice(0, 6) + '…' } })
+  const media = (mediaId ? db.prepare('SELECT * FROM media WHERE id = ? AND album_id = ?').all(mediaId, row.id) : db.prepare('SELECT * FROM media WHERE album_id = ? ORDER BY sort_order, id').all(row.id)) as IdRow[]
+  if (mediaId && !media.length) throw new HttpError(404, 'This item was removed')
+  res.json({ album: albumJson(row), media: media.map((m) => withToken(mediaJson(m), token)), focus: mediaId, gallery })
 }
 
 albumsRouter.delete(
@@ -427,24 +471,39 @@ export const shareRouter = Router()
 shareRouter.get(
   '/:token',
   wrap((req, res) => {
-    const row = albumForToken(req.params.token as string)
-    if (!row) throw new HttpError(404, 'This private link is not valid or was revoked')
-    if (row.visibility === 'shared' && !hasPinAccess(req, row.id as number) && !(req.user && canManageGallery(req.user, row.gallery_id as number))) {
-      // Locked: only the title, the blurred snapshot and the PIN prompt; media stays hidden.
-      res.json({ locked: true, album: { id: row.id, title: row.title, description: row.description, slug: row.slug }, snapshotUrl: row.lock_snapshot ? `/api/share/${req.params.token}/snapshot` : null })
+    const token = req.params.token as string
+    const hit = resolveAlbumToken(token)
+    if (hit) {
+      if (hit.album.visibility !== 'shared' || hasPinAccess(req, hit.album.id as number)) db.prepare('UPDATE album_links SET views = views + 1 WHERE token = ?').run(token)
+      sendAlbum(req, res, hit.album, token, hit.mediaId)
       return
     }
-    db.prepare('UPDATE album_links SET views = views + 1 WHERE token = ?').run(req.params.token as string)
-    logActivity({ userId: req.user?.id ?? null, kind: 'album.link_view', targetType: 'album', targetId: row.id as number, targetLabel: String(row.title ?? ''), ip: req.ip ?? '', detail: { token: (req.params.token as string).slice(0, 6) + '…' } })
-    const media = db.prepare('SELECT * FROM media WHERE album_id = ? ORDER BY sort_order, id').all(row.id) as IdRow[]
-    const token = req.params.token as string
-    res.json({
-      album: albumJson(row),
-      media: media.map((m) => {
-        const j = mediaJson(m)
-        return { ...j, url: `${j.url}?s=${token}`, thumbUrl: j.thumbUrl ? `${j.thumbUrl}?s=${token}` : null }
-      }),
+    const gl = db.prepare('SELECT * FROM gallery_links WHERE token = ? AND revoked_at IS NULL').get(token) as GalleryLinkRow | undefined
+    const g = gl ? (db.prepare('SELECT * FROM galleries WHERE id = ?').get(gl.gallery_id) as IdRow | undefined) : undefined
+    if (!gl || !g) throw new HttpError(404, 'This private link is not valid or was revoked')
+    db.prepare('UPDATE gallery_links SET views = views + 1 WHERE id = ?').run(gl.id)
+    logActivity({ userId: req.user?.id ?? null, kind: 'gallery.link_view', targetType: 'gallery', targetId: g.id as number, targetLabel: String(g.title ?? ''), ip: req.ip ?? '', detail: { token: token.slice(0, 6) + '…' } })
+    const albums = galleryLinkAlbums(g.id as number).map((a) => {
+      const locked = a.visibility === 'shared'
+      const cover = locked ? undefined : ((a.cover_media_id ? db.prepare('SELECT * FROM media WHERE id = ?').get(a.cover_media_id as number) : undefined) ?? db.prepare('SELECT * FROM media WHERE album_id = ? ORDER BY sort_order, id LIMIT 1').get(a.id)) as IdRow | undefined
+      const counts = db.prepare("SELECT COUNT(*) c, SUM(kind = 'video') v FROM media WHERE album_id = ?").get(a.id) as { c: number; v: number | null }
+      return { id: a.id, slug: a.slug, title: a.title, description: a.description, locked, count: counts.c, videos: counts.v ?? 0, cover: cover ? withToken(mediaJson(cover), token) : null }
     })
+    res.json({ gallery: { id: g.id, title: g.title, tagline: g.tagline, slug: g.slug, coverUrl: g.cover_path ? `/api/galleries/${g.id}/cover` : null }, albums })
+  }),
+)
+
+/** One album opened from a gallery link. */
+shareRouter.get(
+  '/:token/album/:slug',
+  wrap((req, res) => {
+    const token = req.params.token as string
+    const gl = db.prepare('SELECT * FROM gallery_links WHERE token = ? AND revoked_at IS NULL').get(token) as GalleryLinkRow | undefined
+    const g = gl ? (db.prepare('SELECT * FROM galleries WHERE id = ?').get(gl.gallery_id) as IdRow | undefined) : undefined
+    if (!gl || !g) throw new HttpError(404, 'This private link is not valid or was revoked')
+    const row = galleryLinkAlbums(g.id as number).find((a) => a.slug === req.params.slug)
+    if (!row) throw new HttpError(404, 'Album not found')
+    sendAlbum(req, res, row, token, null, { title: String(g.title), slug: String(g.slug), token })
   }),
 )
 
@@ -452,7 +511,7 @@ shareRouter.get(
 shareRouter.get(
   '/:token/snapshot',
   wrap((req, res) => {
-    const row = albumForToken(req.params.token as string)
+    const row = albumForToken(req.params.token as string, typeof req.query.album === 'string' ? req.query.album : undefined)
     const rel = row?.lock_snapshot as string | null | undefined
     if (!row || !rel || !existsSync(path.join(MEDIA_DIR, rel))) throw new HttpError(404, 'No preview')
     res.setHeader('Cache-Control', 'private, max-age=300')
@@ -465,7 +524,7 @@ shareRouter.post(
   '/:token/unlock',
   wrap((req, res) => {
     const token = req.params.token as string
-    const row = albumForToken(token)
+    const row = albumForToken(token, str(req.body?.album, 120) || undefined)
     if (!row) throw new HttpError(404, 'This private link is not valid or was revoked')
     if (row.visibility !== 'shared') {
       res.json({ ok: true })

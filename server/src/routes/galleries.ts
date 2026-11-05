@@ -9,6 +9,7 @@ import { pipeline } from 'node:stream/promises'
 import { MEDIA_DIR, mediaRel, removeMedia } from '../db.js'
 import { track } from '../activity.js'
 import { albumJson, galleryJson, mediaJson } from '../serialize.js'
+import { newShareToken } from './albums.js'
 
 export const galleriesRouter = Router()
 
@@ -153,6 +154,52 @@ galleriesRouter.get(
     if (!existsSync(abs)) throw new HttpError(404, 'No image')
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
     res.sendFile(abs)
+  }),
+)
+
+/* ---------- gallery links: one private link opens the whole gallery ---------- */
+
+type GalleryLink = { id: number; gallery_id: number; token: string; label: string; created_by: number | null; created_at: number; views: number; revoked_at: number | null }
+const galleryLinkJson = (l: GalleryLink) => ({ id: l.id, galleryId: l.gallery_id, token: l.token, label: l.label, url: `/s/${l.token}`, createdBy: l.created_by, createdAt: l.created_at, views: l.views, revokedAt: l.revoked_at ?? null })
+
+function managedGallery(req: import('express').Request): GalleryRow {
+  const g = loadGallery(req.params.id as string)
+  if (!canManageGallery(req.user, g.id)) throw new HttpError(403, 'Only the gallery owner can manage its links')
+  return g
+}
+
+galleriesRouter.get(
+  '/:id/links',
+  requireUser,
+  wrap((req, res) => {
+    const g = managedGallery(req)
+    const rows = db.prepare('SELECT * FROM gallery_links WHERE gallery_id = ? ORDER BY created_at DESC').all(g.id) as GalleryLink[]
+    res.json({ links: rows.map(galleryLinkJson) })
+  }),
+)
+
+galleriesRouter.post(
+  '/:id/links',
+  requireUser,
+  wrap((req, res) => {
+    const g = managedGallery(req)
+    if (!req.user!.perms.canShareLinks) throw new HttpError(403, 'Your account is not allowed to create private links. Ask the owner.')
+    const info = db.prepare('INSERT INTO gallery_links(gallery_id, token, label, created_by, created_at) VALUES (?, ?, ?, ?, ?)').run(g.id, newShareToken(), str(req.body?.label, 80), req.user!.id, now())
+    const link = db.prepare('SELECT * FROM gallery_links WHERE id = ?').get(info.lastInsertRowid as number) as GalleryLink
+    track(req, 'gallery.link_create', { targetType: 'gallery', targetId: g.id, targetLabel: g.title, detail: { label: link.label } })
+    res.status(201).json({ link: galleryLinkJson(link) })
+  }),
+)
+
+galleriesRouter.delete(
+  '/:id/links/:linkId',
+  requireUser,
+  wrap((req, res) => {
+    const g = managedGallery(req)
+    const r = db.prepare('UPDATE gallery_links SET revoked_at = ? WHERE id = ? AND gallery_id = ? AND revoked_at IS NULL').run(now(), Number(req.params.linkId), g.id) as { changes: number }
+    if (!r.changes) throw new HttpError(404, 'Link not found')
+    track(req, 'gallery.link_revoke', { targetType: 'gallery', targetId: g.id, targetLabel: g.title })
+    res.json({ ok: true })
   }),
 )
 

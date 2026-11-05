@@ -220,6 +220,22 @@ CREATE TABLE IF NOT EXISTS album_links (
 );
 CREATE INDEX IF NOT EXISTS album_links_album ON album_links(album_id);
 `)
+// Item links: a private link can point at one photo or video instead of the whole album.
+if (!hasColumn('album_links', 'media_id')) db.exec('ALTER TABLE album_links ADD COLUMN media_id INTEGER REFERENCES media(id) ON DELETE CASCADE')
+// Gallery links: one private link opens every published album of a gallery.
+db.exec(`
+CREATE TABLE IF NOT EXISTS gallery_links (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  gallery_id INTEGER NOT NULL REFERENCES galleries(id) ON DELETE CASCADE,
+  token TEXT NOT NULL UNIQUE,
+  label TEXT NOT NULL DEFAULT '',
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at INTEGER NOT NULL,
+  views INTEGER NOT NULL DEFAULT 0,
+  revoked_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS gallery_links_gallery ON gallery_links(gallery_id);
+`)
 if (!hasColumn('users', 'perms')) db.exec("ALTER TABLE users ADD COLUMN perms TEXT NOT NULL DEFAULT '{}'")
 // v6: many galleries per account (named, with a cover, one primary), groups with layered policy,
 // per-account limits/overrides, forced password change, notifications.

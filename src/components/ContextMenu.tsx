@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { ChevronRight, Code2, Copy, ExternalLink, Globe, HelpCircle, Image as ImageIcon, Link2, ListTodo, Lock, Pencil, Settings, Sparkles, StickyNote, TextSelect, Wand2 } from 'lucide-react'
+import { ChevronRight, Clapperboard, Code2, Copy, ExternalLink, Globe, HelpCircle, Image as ImageIcon, LayoutGrid, Link2, Share2, ListTodo, Lock, Pencil, Settings, Sparkles, StickyNote, TextSelect, Wand2 } from 'lucide-react'
 import { settingsEntries } from './Banner'
-import { useAiStatus, useCreateLink, useMe, useTogglePublic } from '../api/hooks'
+import { copyText, useAiStatus, useCreateGalleryLink, useCreateLink, useMe, useTogglePublic } from '../api/hooks'
 import { useDevStatus } from '../api/dev'
 import { useUI } from '../store/ui'
 import { UiIcon, useUiConfig, visibleTo } from '../ui/config'
@@ -15,6 +15,8 @@ interface MenuState {
   href: string | null
   img: string | null
   album: { id: number; slug: string; title: string; isPublic: boolean; manage: boolean } | null
+  media: { id: number; title: string; kind: string; albumId: number | null } | null
+  gallery: { id: number; slug: string; title: string; manage: boolean } | null
   region: { label: string; to: string } | null
 }
 
@@ -67,6 +69,7 @@ export function ContextMenu() {
   const navigate = useNavigate()
   const togglePublic = useTogglePublic()
   const createLink = useCreateLink()
+  const createGalleryLink = useCreateGalleryLink()
   const enabled = !!me
   const ai = !!status?.allowed
   const cm = ui.contextMenu
@@ -89,8 +92,13 @@ export function ContextMenu() {
       const ownerId = al?.dataset.albumOwner ? Number(al.dataset.albumOwner) : null
       const manage = !!al && (al.dataset.albumManage === '1' || me?.role === 'owner' || (ownerId != null && ownerId === me?.id))
       const album = al ? { id: Number(al.dataset.albumId), slug: al.dataset.albumSlug ?? '', title: al.dataset.albumTitle ?? '', isPublic: al.dataset.albumPublic === '1', manage } : null
+      const md = target.closest('[data-media-id]') as HTMLElement | null
+      const media = md ? { id: Number(md.dataset.mediaId), title: md.dataset.mediaTitle ?? '', kind: md.dataset.mediaKind ?? 'image', albumId: md.dataset.mediaAlbum ? Number(md.dataset.mediaAlbum) : album?.id ?? null } : null
+      const gl = target.closest('[data-gallery-id]') as HTMLElement | null
+      const gOwner = gl?.dataset.galleryOwner ? Number(gl.dataset.galleryOwner) : null
+      const gallery = gl ? { id: Number(gl.dataset.galleryId), slug: gl.dataset.gallerySlug ?? '', title: gl.dataset.galleryTitle ?? '', manage: gl.dataset.galleryManage === '1' || me?.role === 'owner' || (gOwner != null && gOwner === me?.id) } : null
       setOpenSub(null)
-      setMenu({ x, y, selection, element: describe(target), href: a?.href ?? null, img: img?.currentSrc ?? null, album, region: regionOf(target) })
+      setMenu({ x, y, selection, element: describe(target), href: a?.href ?? null, img: img?.currentSrc ?? null, album, media, gallery, region: regionOf(target) })
     }
     const close = () => {
       setMenu(null)
@@ -143,13 +151,29 @@ export function ContextMenu() {
   )
   const custom = cm.custom.filter((l) => l.enabled && visibleTo(l.show, me))
   const go = (to: string, newTab: boolean) => (/^(https?:)?\/\//i.test(to) || newTab ? window.open(to, '_blank', 'noopener') : navigate(to))
-  const albumItems = menu.album && (cm.openAlbum || (menu.album.manage && (cm.togglePublic || cm.privateLink)))
+  const albumItems = !!menu.album
   const assistantItems = ai && (cm.askSelection || cm.askElement || cm.explainPage || cm.openAssistant)
   const settingsItems = cm.settings && (me?.role === 'owner' || me?.role === 'admin') ? settingsEntries(me.role).filter((e) => e.to !== '/dev') : []
+  const linksOn = ui.flags.shareLinks !== false
+  // Items: the album's managers mint item links; everyone can copy the members' direct link.
+  const mediaManage = !!menu.media && menu.media.albumId != null && !!menu.album?.manage && menu.album.id === menu.media.albumId
+  const copyDirect = (url: string, what: string) => copyText(url).then((ok) => notify(ok ? `${what} copied` : url, ok ? 'success' : 'info'))
+  const linkDone = (what: string) => ({ onSuccess: (l: { fullUrl: string }) => notify(`${what} copied: ${l.fullUrl}`, 'success'), onError: (e: Error) => notify(e.message, 'error') })
   const newNote = () => navigate('/dev/tasks/workspace', { state: { newNote: { title: document.title, text: menu.selection ? `${menu.selection}\n\n${window.location.href}` : window.location.href } } })
 
   return (
     <div ref={menuRef} className="ctx-menu" style={{ left: menu.x, top: menu.y }} role="menu" onClick={(e) => e.stopPropagation()}>
+      {menu.media && (
+        <div data-ctx-media="">
+          <div className="ctx-head">
+            {menu.media.kind === 'video' ? <Clapperboard size={12} /> : <ImageIcon size={12} />} {menu.media.kind === 'video' ? 'Video' : 'Photo'} · {(menu.media.title || 'Untitled').slice(0, 28)}
+          </div>
+          {mediaManage && linksOn && item('Create public link to this item (copies it)', <Share2 size={14} />, () => createLink.mutate({ albumId: menu.media!.albumId!, mediaId: menu.media!.id }, linkDone('Item link')), { 'data-ctx-media-link': '' })}
+          {menu.album && item('Copy direct link (members)', <Link2 size={14} />, () => copyDirect(`${window.location.origin}/album/${menu.album!.slug}?m=${menu.media!.id}`, 'Direct link'))}
+          {menu.album && !location.pathname.startsWith(`/album/${menu.album.slug}`) && item('Open in album', <ExternalLink size={14} />, () => navigate(`/album/${menu.album!.slug}?m=${menu.media!.id}`))}
+          <div className="ctx-sep" />
+        </div>
+      )}
       {albumItems && (
         <>
           <div className="ctx-head">
@@ -163,9 +187,21 @@ export function ContextMenu() {
               menu.album!.isPublic ? <Lock size={14} /> : <Globe size={14} />,
               () => togglePublic.mutate({ albumId: menu.album!.id, makePublic: !menu.album!.isPublic }, { onSuccess: () => notify(menu.album!.isPublic ? 'Album is now for buddies & members' : 'Album is now public', 'success'), onError: (e: Error) => notify(e.message, 'error') }),
             )}
-          {menu.album!.manage && cm.privateLink && ui.flags.shareLinks !== false && item('Create private link (copies it)', <Link2 size={14} />, () => createLink.mutate({ albumId: menu.album!.id }, { onSuccess: (l) => notify(`Private link copied: ${l.fullUrl}`, 'success'), onError: (e: Error) => notify(e.message, 'error') }))}
+          {menu.album!.manage && cm.privateLink && linksOn && item('Create public link to album (copies it)', <Share2 size={14} />, () => createLink.mutate({ albumId: menu.album!.id }, linkDone('Album link')))}
+          {item('Copy direct link (members)', <Link2 size={14} />, () => copyDirect(`${window.location.origin}/album/${menu.album!.slug}`, 'Direct link'))}
           <div className="ctx-sep" />
         </>
+      )}
+      {menu.gallery && (
+        <div data-ctx-gallery="">
+          <div className="ctx-head">
+            <LayoutGrid size={12} /> Gallery · {menu.gallery.title.slice(0, 28)}
+          </div>
+          {!location.pathname.startsWith(`/g/${menu.gallery.slug}`) && item('Open gallery', <ExternalLink size={14} />, () => navigate(`/g/${menu.gallery!.slug}`))}
+          {menu.gallery.manage && linksOn && item('Create public link to gallery (copies it)', <Share2 size={14} />, () => createGalleryLink.mutate({ galleryId: menu.gallery!.id }, linkDone('Gallery link')))}
+          {item('Copy direct link (members)', <Link2 size={14} />, () => copyDirect(`${window.location.origin}/g/${menu.gallery!.slug}`, 'Direct link'))}
+          <div className="ctx-sep" />
+        </div>
       )}
       {devUnlocked && menu.region && item(`Edit the ${menu.region.label}`, <Pencil size={14} />, () => navigate(menu.region!.to))}
       {assistantItems && (
@@ -200,7 +236,7 @@ export function ContextMenu() {
       ) : (
         custom.map((l) => item(l.label, <UiIcon name={l.icon} size={14} />, () => go(l.to, l.newTab)))
       )}
-      {(albumItems || assistantItems || settingsItems.length > 0 || me?.role === 'owner' || custom.length > 0) && <div className="ctx-sep" />}
+      {(albumItems || menu.media || menu.gallery || assistantItems || settingsItems.length > 0 || me?.role === 'owner' || custom.length > 0) && <div className="ctx-sep" />}
       {cm.copySelection && menu.selection && item('Copy selection', <Copy size={14} />, () => navigator.clipboard.writeText(menu.selection).then(() => notify('Copied', 'success')))}
       {cm.openLink && menu.href && item('Open link in new tab', <ExternalLink size={14} />, () => window.open(menu.href!, '_blank', 'noopener'))}
       {cm.copyPageLink && item('Copy page link', <Copy size={14} />, () => navigator.clipboard.writeText(window.location.href).then(() => notify('Link copied', 'success')))}
