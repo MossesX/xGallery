@@ -27,7 +27,7 @@ function Tile({ item, layout, onOpen, index, frameClass = '', frameStyle }: Tile
   const captionInside = layout.caption === 'overlay' || layout.caption === 'hover'
   const hasCaption = item.title || item.description
   return (
-    <div className={`tile-frame ${layout.caption === 'below' ? 'below-caption' : ''} ${frameClass}`} style={frameStyle}>
+    <div className={`tile-frame ${layout.caption === 'below' ? 'below-caption' : ''} ${frameClass}`} style={frameStyle} data-media-id={item.id} data-media-title={item.title} data-media-kind={item.kind} data-media-album={item.albumId}>
       <div className={cls} onClick={() => onOpen(index)} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onOpen(index)}>
         {item.kind === 'video' ? <VideoPreview item={item} /> : <MediaThumb item={item} />}
         {item.kind === 'video' && (

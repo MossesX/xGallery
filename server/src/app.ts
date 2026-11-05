@@ -72,7 +72,7 @@ app.use('/api', attachDev)
 // Sign-in, the shell's settings, account/contact requests, themes and private share links stay open.
 app.use('/api', (req, res, next) => {
   if (req.user || getPolicy().publicBrowsing) return next()
-  const open = req.path.startsWith('/auth') || req.path.startsWith('/settings') || req.path.startsWith('/inbox') || req.path.startsWith('/share') || req.path.startsWith('/themes') || req.path.startsWith('/github/webhook') || req.path.startsWith('/setup/termux-key') || (req.path.startsWith('/media/') && req.query.s != null)
+  const open = req.path.startsWith('/auth') || req.path.startsWith('/settings') || req.path.startsWith('/inbox') || req.path.startsWith('/share') || req.path.startsWith('/themes') || req.path.startsWith('/github/webhook') || req.path.startsWith('/setup/termux-key') || ((req.path.startsWith('/media/') || /^\/galleries\/\d+\/cover$/.test(req.path)) && req.query.s != null)
   if (open) return next()
   res.status(401).json({ error: 'Sign in to browse this site', code: 'login_required' })
 })

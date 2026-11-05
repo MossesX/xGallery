@@ -30,6 +30,12 @@ and a small Android wrapper app for that panel.
   site, pushes `panel`, waits for the panel, then shows the first-session prompt. Progress is kept
   in setting `devNewProjects` (no secrets) so a stopped run resumes. The panel's GitHub token needs
   classic `repo` + `workflow` scopes.
+- **Recent (Nov 5):** video uploads fixed (phones sending no file type, HEVC/.mov the browser
+  can't preview, Node's 5-minute request limit, invisible thumbnail-less video tiles). Private
+  links now come in three kinds: item (`album_links.media_id`, opens xGallery's viewer on that one
+  photo/video), album, and gallery (`gallery_links`, `/s/:token` lists albums, `/s/:token/:album`).
+  Right-click / long-press on an item, album or gallery offers public link + members' direct link.
+  Album page has "Add photos & videos", drop-anywhere upload and a phone add button.
 - **Next:** not recorded in the repo. Ask Brett, then write it here.
 - Note: `deploy/README.md` ends with an outdated line saying data lives in each browser's
   IndexedDB; the README "Storage model" (server + SQLite) is current. README's

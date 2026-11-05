@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, Download, Info, Link2, Maximize2, Pause, Play, Repeat, X, ZoomIn, ZoomOut } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Download, Info, Link2, Maximize2, Pause, Play, Repeat, Share2, X, ZoomIn, ZoomOut } from 'lucide-react'
 import type { MediaItem } from '../api/types'
 import { LikeButton } from './LikeButton'
 import { ReactionBar } from './ReactionBar'
@@ -21,13 +21,15 @@ interface Props {
   readOnly?: boolean
   /** Shown above the title, e.g. the album name. */
   context?: string
+  /** Album managers: mint a private public link that opens this item in xGallery's viewer. */
+  onPrivateLink?: (item: MediaItem) => void
 }
 
 /**
  * The immersive viewer: a dark stage for images and videos, a filmstrip of the whole album,
  * a collapsible info and comments panel, zoom with drag-to-pan, slideshow and autoplay-next.
  */
-export function Lightbox({ items, index, onClose, onNavigate, allowComments, allowLikes, allowDownloads, readOnly, context }: Props) {
+export function Lightbox({ items, index, onClose, onNavigate, allowComments, allowLikes, allowDownloads, readOnly, context, onPrivateLink }: Props) {
   const ui = useUiConfig()
   const item = items[index]
   const [sideOpen, setSideOpen] = useState(() => window.innerWidth > 1100)
@@ -123,7 +125,7 @@ export function Lightbox({ items, index, onClose, onNavigate, allowComments, all
   const dlUrl = `${item.url}${item.url.includes('?') ? '&' : '?'}download=1`
 
   return (
-    <div className={`viewer ${chromeHidden ? 'chrome-hidden' : ''} ${sideOpen ? 'with-side' : ''}`} ref={rootRef} role="dialog" aria-modal="true" aria-label={item.title || 'Media viewer'} onMouseMove={bump}>
+    <div className={`viewer ${chromeHidden ? 'chrome-hidden' : ''} ${sideOpen ? 'with-side' : ''}`} ref={rootRef} data-media-id={item.id} data-media-title={item.title} data-media-kind={item.kind} role="dialog" aria-modal="true" aria-label={item.title || 'Media viewer'} onMouseMove={bump}>
       <header className="viewer-top">
         <button className="lb-btn" onClick={onClose} aria-label="Close" title="Close (Esc)">
           <X size={18} />
@@ -157,6 +159,11 @@ export function Lightbox({ items, index, onClose, onNavigate, allowComments, all
           {!readOnly && (
             <button className="lb-btn" onClick={copyLink} aria-label="Copy link" title="Copy link to this item">
               <Link2 size={17} />
+            </button>
+          )}
+          {onPrivateLink && (
+            <button className="lb-btn" onClick={() => onPrivateLink(item)} aria-label="Create public link" title="Create a private link anyone can open (copies it)" data-lb-private-link="">
+              <Share2 size={17} />
             </button>
           )}
           {allowDownloads && (

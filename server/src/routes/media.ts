@@ -23,6 +23,12 @@ export function removeMediaFiles(row: Record<string, unknown>): void {
   for (const p of [row.file_path, row.thumb_path]) if (typeof p === 'string' && p) removeMedia(p)
 }
 
+const MIME_BY_EXT: Record<string, string> = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', avif: 'image/avif', heic: 'image/heic', heif: 'image/heif', mp4: 'video/mp4', m4v: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm', mkv: 'video/x-matroska', '3gp': 'video/3gpp', '3g2': 'video/3gpp2', avi: 'video/x-msvideo', ts: 'video/mp2t', mpg: 'video/mpeg', mpeg: 'video/mpeg', ogv: 'video/ogg' }
+
+export function mimeFromName(name: string): string {
+  return MIME_BY_EXT[path.extname(name).toLowerCase().slice(1)] ?? ''
+}
+
 function extFor(mime: string, name: string): string {
   const fromName = path.extname(name).toLowerCase().replace(/[^a-z0-9.]/g, '')
   if (fromName && fromName.length <= 6) return fromName
@@ -56,7 +62,13 @@ function canView(req: import('express').Request, row: Record<string, unknown>): 
     | undefined
   if (!album) return false
   const share = typeof req.query.s === 'string' ? req.query.s : ''
-  if (share && ((album.share_token && share === album.share_token) || db.prepare('SELECT 1 FROM album_links WHERE token = ? AND album_id = ? AND revoked_at IS NULL').get(share, album.id)) && (album.visibility !== 'shared' || hasPinAccess(req, album.id))) return true
+  if (share && (album.visibility !== 'shared' || hasPinAccess(req, album.id))) {
+    if (album.share_token && share === album.share_token) return true
+    // Album links open every item; item links open only the one they point at.
+    if (db.prepare('SELECT 1 FROM album_links WHERE token = ? AND album_id = ? AND revoked_at IS NULL AND (media_id IS NULL OR media_id = ?)').get(share, album.id, row.id as number)) return true
+    // Gallery links open the gallery's published, public and (after the PIN) shared albums.
+    if (['published', 'public', 'shared'].includes(album.visibility) && db.prepare('SELECT 1 FROM gallery_links WHERE token = ? AND gallery_id = ? AND revoked_at IS NULL').get(share, album.gallery_id)) return true
+  }
   // Public gallery landing: the gallery's designated public album, or its splash image.
   const gslug = typeof req.query.g === 'string' ? req.query.g : ''
   if (gslug) {
@@ -132,7 +144,9 @@ mediaRouter.post(
     const albumId = Number(req.params.albumId)
     requireManage(req, albumId)
     const meta = parseJson<Record<string, unknown>>(Buffer.from(str(req.headers['x-meta'], 4000) || 'e30=', 'base64').toString('utf8'), {})
-    const mime = str(req.headers['content-type'], 100) || 'application/octet-stream'
+    // Phones often send videos with no type (or a generic one): fall back to the file name's extension.
+    const sent = str(req.headers['content-type'], 100).toLowerCase()
+    const mime = sent.startsWith('image/') || sent.startsWith('video/') ? sent : mimeFromName(str(meta.fileName, 200)) || sent || 'application/octet-stream'
     const kind = mime.startsWith('video/') ? 'video' : mime.startsWith('image/') ? 'image' : null
     if (!kind) throw new HttpError(415, `Unsupported file type: ${mime}`)
     const policy = getPolicy()

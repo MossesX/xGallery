@@ -2034,3 +2034,13 @@ button.link { background: none; border: 0; padding: 0; color: var(--c-primary); 
 .np-project { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--c-border); flex-wrap: wrap; }
 .np-secret { padding: 4px 8px; border-radius: 6px; background: var(--c-surface-2, var(--c-primary-soft)); word-break: break-all; user-select: all; }
 .np-first { max-height: 320px; overflow: auto; white-space: pre-wrap; }
+
+/* Album page: add media in place (drop anywhere, floating add button on phones). */
+.album-dropping { outline: 2px dashed var(--c-primary); outline-offset: -6px; border-radius: var(--radius); }
+.album-drop-hint { position: fixed; inset: auto 50% 32px auto; transform: translateX(50%); z-index: 60; display: flex; align-items: center; gap: 10px; padding: 14px 22px; border-radius: 999px; background: var(--c-primary); color: var(--c-on-primary, #fff); font-weight: 600; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25); pointer-events: none; }
+.album-fab { display: none; }
+@media (max-width: 760px) {
+  .album-fab { display: inline-flex; position: fixed; right: 18px; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); z-index: 40; width: 56px; height: 56px; border-radius: 50%; justify-content: center; padding: 0; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3); }
+}
+.video-preview video.video-no-thumb { position: relative; inset: auto; display: block; width: 100%; height: auto; object-fit: cover; background: #111; }
+.tile.shape-square .video-preview video.video-no-thumb, .tile.shape-portrait .video-preview video.video-no-thumb, .tile.shape-landscape .video-preview video.video-no-thumb, .tile.shape-circle .video-preview video.video-no-thumb, .layout-mosaic .video-preview video.video-no-thumb, .layout-justified .video-preview video.video-no-thumb { position: absolute; inset: 0; height: 100%; }

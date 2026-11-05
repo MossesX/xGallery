@@ -128,6 +128,7 @@ export default function App() {
             <Route path="/change-password" element={<ChangePasswordPage />} />
             <Route path="/contact" element={<RequestAccountPage />} />
             <Route path="/s/:token" element={<SharePage />} />
+            <Route path="/s/:token/:album" element={<SharePage />} />
             <Route path="/public" element={<BrowsingGate><PublicDirectoryPage /></BrowsingGate>} />
             <Route path="/public/:slug" element={<BrowsingGate><PublicGalleryPage /></BrowsingGate>} />
             <Route path="/public/:slug/:album" element={<BrowsingGate><PublicAlbumPage /></BrowsingGate>} />

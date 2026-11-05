@@ -7,7 +7,7 @@ import { Avatar } from './Avatar'
 export function GalleryTile({ gallery, to, publicMode = false }: { gallery: Gallery; to: string; publicMode?: boolean }) {
   const previews = gallery.previews.filter(Boolean).slice(0, 4)
   return (
-    <Link to={to} className="gallery-tile">
+    <Link to={to} className="gallery-tile" data-gallery-id={publicMode ? undefined : gallery.id} data-gallery-slug={gallery.slug} data-gallery-title={gallery.title} data-gallery-owner={gallery.owner?.id ?? ''}>
       <div className="splash">
         {gallery.splash ? <img src={gallery.splash.thumbUrl ?? gallery.splash.url} alt="" /> : previews[0]?.cover ? <img src={previews[0].cover.thumbUrl ?? previews[0].cover.url} alt="" /> : null}
         <div className="shade" />

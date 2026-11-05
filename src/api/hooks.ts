@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
 import type { UiConfig } from './dev'
-import type { ActivityPage, ActivityPartition, AlbumLink, AiConversation, Group, NewAlbumEntry, Notification, SitePolicy, TimelineItem, TreeUser, AiMessage, AiSettingsView, AiStatus, Album, BuddyLists, Comment, Conversation, Gallery, InboxItem, MediaItem, Message, Person, PublicFeed, Session, SiteSettings, Stats, Theme, ThemeDraft, Unread, User, PublicPolicy, PanelInfo } from './types'
+import type { ActivityPage, ActivityPartition, AlbumLink, GalleryLink, AiConversation, Group, NewAlbumEntry, Notification, SitePolicy, TimelineItem, TreeUser, AiMessage, AiSettingsView, AiStatus, Album, BuddyLists, Comment, Conversation, Gallery, InboxItem, MediaItem, Message, Person, PublicFeed, Session, SiteSettings, Stats, Theme, ThemeDraft, Unread, User, PublicPolicy, PanelInfo } from './types'
 
 export const keys = {
   me: ['me'] as const,
@@ -156,8 +156,40 @@ export function usePublicAlbum(slug: string | undefined, album: string | undefin
   })
 }
 
-export function useShare(token: string | undefined) {
-  return useQuery({ queryKey: keys.share(token ?? ''), queryFn: () => api.get<{ album: Album; media: MediaItem[]; locked?: boolean; snapshotUrl?: string | null }>(`/api/share/${token}`), enabled: !!token })
+/** What a private link opens: an album, one item of it (`focus`), or a whole gallery. */
+export interface SharePayload {
+  album?: Album
+  media?: MediaItem[]
+  focus?: number | null
+  locked?: boolean
+  snapshotUrl?: string | null
+  gallery?: SharedGallery | { title: string; slug: string; token: string }
+  albums?: SharedGalleryAlbum[]
+}
+export interface SharedGallery {
+  id: number
+  title: string
+  tagline: string
+  slug: string
+  coverUrl: string | null
+}
+export interface SharedGalleryAlbum {
+  id: number
+  slug: string
+  title: string
+  description: string
+  locked: boolean
+  count: number
+  videos: number
+  cover: MediaItem | null
+}
+
+export function useShare(token: string | undefined, albumSlug?: string) {
+  return useQuery({
+    queryKey: [...keys.share(token ?? ''), albumSlug ?? ''],
+    queryFn: () => api.get<SharePayload>(albumSlug ? `/api/share/${token}/album/${encodeURIComponent(albumSlug)}` : `/api/share/${token}`),
+    enabled: !!token,
+  })
 }
 
 /** Invalidate everything that depends on gallery content. */
@@ -269,17 +301,49 @@ export function useAlbumLinks(albumId: number | null | undefined, enabled = true
 export function useCreateLink() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (v: { albumId: number; label?: string }) => {
-      const r = await api.post<{ link: AlbumLink }>(`/api/albums/${v.albumId}/links`, { label: v.label ?? '' })
+    mutationFn: async (v: { albumId: number; mediaId?: number; label?: string }) => {
+      const r = await api.post<{ link: AlbumLink }>(`/api/albums/${v.albumId}/links`, { label: v.label ?? '', mediaId: v.mediaId })
       const url = `${location.origin}${r.link.url}`
-      try {
-        await navigator.clipboard.writeText(url)
-      } catch {
-        /* clipboard may be unavailable */
-      }
+      await copyText(url)
       return { ...r.link, fullUrl: url }
     },
     onSuccess: (_r, v) => qc.invalidateQueries({ queryKey: ['album-links', v.albumId] }),
+  })
+}
+
+/** Copy to the clipboard; quietly does nothing where the clipboard is blocked (the toast still shows the link). */
+export async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Mint a private link that opens a whole gallery (its published albums) and copy it. */
+export function useCreateGalleryLink() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (v: { galleryId: number; label?: string }) => {
+      const r = await api.post<{ link: GalleryLink }>(`/api/galleries/${v.galleryId}/links`, { label: v.label ?? '' })
+      const url = `${location.origin}${r.link.url}`
+      await copyText(url)
+      return { ...r.link, fullUrl: url }
+    },
+    onSuccess: (_r, v) => qc.invalidateQueries({ queryKey: ['gallery-links', v.galleryId] }),
+  })
+}
+
+export function useGalleryLinks(galleryId: number | undefined, enabled = true) {
+  return useQuery({ queryKey: ['gallery-links', galleryId], queryFn: () => api.get<{ links: GalleryLink[] }>(`/api/galleries/${galleryId}/links`).then((r) => r.links), enabled: enabled && galleryId != null })
+}
+
+export function useRevokeGalleryLink() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (v: { galleryId: number; linkId: number }) => api.del(`/api/galleries/${v.galleryId}/links/${v.linkId}`),
+    onSuccess: (_r, v) => qc.invalidateQueries({ queryKey: ['gallery-links', v.galleryId] }),
   })
 }
 

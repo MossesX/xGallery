@@ -2,10 +2,23 @@ import type { MediaKind } from '../api/types'
 
 const THUMB_MAX = 640
 
+const IMAGE_EXT = /\.(jpe?g|png|webp|gif|avif|heic|heif)$/i
+const VIDEO_EXT = /\.(mp4|m4v|mov|webm|mkv|3gp|3g2|avi|ts|mpe?g|ogv)$/i
+const MIME_BY_EXT: Record<string, string> = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', avif: 'image/avif', heic: 'image/heic', heif: 'image/heif', mp4: 'video/mp4', m4v: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm', mkv: 'video/x-matroska', '3gp': 'video/3gpp', '3g2': 'video/3gpp2', avi: 'video/x-msvideo', ts: 'video/mp2t', mpg: 'video/mpeg', mpeg: 'video/mpeg', ogv: 'video/ogg' }
+
+/** Photo or video: by the browser's type, or by the file name when the phone sends no type. */
 export function kindOf(file: File): MediaKind | null {
   if (file.type.startsWith('image/')) return 'image'
   if (file.type.startsWith('video/')) return 'video'
+  if (IMAGE_EXT.test(file.name)) return 'image'
+  if (VIDEO_EXT.test(file.name)) return 'video'
   return null
+}
+
+/** The content type to upload with: the browser's, or one guessed from the extension. */
+export function mimeOf(file: File): string {
+  if (file.type.startsWith('image/') || file.type.startsWith('video/')) return file.type
+  return MIME_BY_EXT[file.name.split('.').pop()?.toLowerCase() ?? ''] ?? (file.type || 'application/octet-stream')
 }
 
 function canvasToBlob(canvas: HTMLCanvasElement, type = 'image/webp', quality = 0.82): Promise<Blob> {
@@ -63,9 +76,17 @@ export async function processVideo(file: File): Promise<ProcessedMedia> {
   video.playsInline = true
   video.preload = 'auto'
   try {
+    // A codec this browser can't decode (HEVC, some .mov/.mkv) must not block the upload: give up after 8 s.
     await new Promise<void>((resolve, reject) => {
-      video.onloadedmetadata = () => resolve()
-      video.onerror = () => reject(new Error('Could not decode video'))
+      const timer = setTimeout(() => reject(new Error('Video metadata timed out')), 8000)
+      video.onloadedmetadata = () => {
+        clearTimeout(timer)
+        resolve()
+      }
+      video.onerror = () => {
+        clearTimeout(timer)
+        reject(new Error('Could not decode video'))
+      }
       video.src = url
     })
     const w = video.videoWidth || 16
@@ -94,9 +115,13 @@ export async function processVideo(file: File): Promise<ProcessedMedia> {
 
 export async function processFile(file: File): Promise<ProcessedMedia> {
   const kind = kindOf(file)
-  if (kind === 'image') return processImage(file)
-  if (kind === 'video') return processVideo(file)
-  throw new Error(`Unsupported file type: ${file.type || 'unknown'}`)
+  if (!kind) throw new Error(`Unsupported file type: ${file.type || 'unknown'}`)
+  try {
+    return kind === 'image' ? await processImage(file) : await processVideo(file)
+  } catch {
+    // The browser can't preview it (HEIC, HEVC...): upload anyway, without a thumbnail.
+    return kind === 'video' ? { kind, width: 16, height: 9 } : { kind, width: 4, height: 3 }
+  }
 }
 
 export function formatBytes(n: number): string {
